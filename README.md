@@ -222,7 +222,9 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 │   ├── 04-已知问题.md               仍然存在的问题
 │   ├── 05-恢复手册.md               出问题怎么救
 │   └── 06-EFI配置详解.md            config.plist 逐项说明
-├── efi/OC/config.plist.example      脱敏后的 OpenCore 配置
+├── efi/
+│   ├── OC/config.plist.example      脱敏后的 OpenCore 配置
+│   └── EFI目录结构.md               实际 EFI 分区结构、为什么禁用某些组件
 ├── patches/
 │   ├── PhxAccel-源码修改.md         EDID + 背光 + VRAM 池
 │   └── PhxBringup-源码修改.md       ptfix
