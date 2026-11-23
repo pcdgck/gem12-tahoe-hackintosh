@@ -180,6 +180,68 @@ Transport:    USB
 Firmware:     v8641 c8641
 ```
 
+## 网卡
+
+### 板载 Intel I226-V ×2（2.5G）—— 原生驱动
+
+```
+Intel(R) I226 V:
+  Bus:            PCI
+  Vendor ID:      0x8086
+  Device ID:      0x125c
+  Revision:       0x0004
+  PCIe Link:      5.0 GT/s, x1
+  Driver:         com.apple.DriverKit-AppleEthernetE1000
+  BSD Device:     en0 / en1
+  MAC:            c8:ff:bf:03:d1:5c (en0)
+                  c8:ff:bf:03:d1:5d (en1)
+```
+
+`ioreg` 里的驱动实例（两个端口各一个）：
+
+```
++-o DriverKit_AppleEthernetE1000
+      <class IOUserNetworkEthernet, registered, matched, active>
+      "IOModel"          = "Intel(R) I226 V"
+      "IOMACAddress"     = <c8ffbf03d15c>
+      "IOInterfaceName"  = "en0"
+      "IOPowerManagement"= {"CurrentPowerState"=3, "MaxPowerState"=3}
+      "IOPCIMatch"       = "0x00008086&0x0000ffff"
+      "IOPCIClassMatch"  = "0x02000000&0xffffff00"
+      "IOProbeScore"     = 3000
+```
+
+**无需任何第三方 kext。** 这是 macOS 自带的 DriverKit 驱动。
+
+当前状态（采集时）：
+
+```
+en0  status: inactive   ← 网线未插
+en1  status: inactive   ← 网线未插
+```
+
+`status: inactive` + `media: autoselect (none)` 表示**没有物理链路**，
+不是驱动问题。插上线应变为 `active` / `2500Base-T`。
+
+> **重要更正**：早期记录写「板载 I226-V 无 macOS 驱动」是**错的**。
+> 那个结论只在 **Recovery（安装器）环境**里成立 ——
+> Recovery 是精简系统，不加载 DriverKit 扩展。
+> 装好完整系统后板载网口免驱可用。详见
+> [docs/03-踩坑记录.md](../docs/03-踩坑记录.md) 3.1。
+
+### USB 网卡 AX88179B（装机时用）
+
+```
+AX88179B:
+  Bus:            USB
+  Vendor:         ASIX (0x0b95)
+  Product ID:     0x1790
+  USB Link Speed: 5 Gb/s
+  Driver:         com.apple.driver.usb.cdc.ncm
+  BSD Device:     en2
+  MAC:            9c:69:d3:d2:00:53
+```
+
 ## Wi-Fi
 
 ```
@@ -190,6 +252,15 @@ Driver:        AirportItlwm 2.4.0
 支持:          WPA2-Personal / WPA2+WPA3 transition
 不支持:        WPA3-only (SAE)、AWDL
 ```
+
+## 网络接口汇总
+
+| 接口 | 设备 | 驱动 | 状态 |
+|---|---|---|---|
+| `en0` | Intel I226-V 口1 | `AppleEthernetE1000`（原生 dext） | inactive（未插线） |
+| `en1` | Intel I226-V 口2 | `AppleEthernetE1000`（原生 dext） | inactive（未插线） |
+| `en2` | USB AX88179B | `com.apple.driver.usb.cdc.ncm` | **active**，192.168.1.223 |
+| `en3` | Intel AX210 Wi-Fi | AirportItlwm 2.4.0 | inactive |
 
 ## 已知不可用
 

@@ -32,7 +32,8 @@
 | **Wi-Fi** | ✅ | Intel AX210，`AirportItlwm` 2.4.0 |
 | **蓝牙** | ✅ | Intel AX210，`BlueToolFixup` + `IntelBluetoothFirmware` 2.5.1 |
 | USB | ✅ | XHC0，6 设备正常 |
-| 有线网卡 | ✅ | USB AX88179B（板载 I226-V 无驱动） |
+| **有线网卡** | ✅ | **板载 Intel I226-V ×2，原生驱动**（`AppleEthernetE1000` dext） |
+| USB 网卡 | ✅ | AX88179B，装机/备用（Recovery 里需要它，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
 | 存储 | ✅ | NVMe + APFS |
 | CPU 电源管理 | ✅ | X86PlatformPlugin |
 | **音频** | ❌ | AMD ACP（`1022:15e3`）无 macOS 驱动 |
@@ -58,7 +59,7 @@
 | 内存 | 48 GB DDR5-5600 |
 | 存储 | aigo NVMe SSD P7000Z 2TB（整盘安装 macOS） |
 | 无线 | Intel AX210（`8086:2723`，Wi-Fi 6E + BT 5.3） |
-| 有线 | 板载 Intel I226-V（**无 macOS 驱动**，用 USB AX88179B 替代） |
+| 有线 | 板载 **Intel I226-V ×2**（2.5G，`8086:125C`，**macOS 原生驱动**）<br>+ USB AX88179B（装机时用，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
 | 显示 | **仅外接 HDMI**，2160×1440@60（固件 GOP 点亮的单一模式） |
 | 系统 | macOS Tahoe **26.7.3**（build `25G342`） |
 | SMBIOS | `MacBookPro16,1` |
