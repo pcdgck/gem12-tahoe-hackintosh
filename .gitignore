@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# 第三方二进制（不入库）
+*.kext/
+*.efi
+*.dylib
+*.bundle/
+*.zip
+*.dmg
+*.pkg
+*.aml
+
+# 日志与备份
+*.log
+*.ips
+*.bak
+*.before-*
+*.orig
+config.plist.before-*
+aux.kc.*
