@@ -223,8 +223,17 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 │   ├── 05-恢复手册.md               出问题怎么救
 │   └── 06-EFI配置详解.md            config.plist 逐项说明
 ├── efi/
-│   ├── OC/config.plist.example      脱敏后的 OpenCore 配置
-│   └── EFI目录结构.md               实际 EFI 分区结构、为什么禁用某些组件
+│   ├── EFI/                         ★ 完整可刷写的 EFI 分区内容（33 MB）
+│   │   ├── BOOT/BOOTx64.efi
+│   │   ├── OC/
+│   │   │   ├── OpenCore.efi
+│   │   │   ├── config.plist         三码已替换为占位符
+│   │   │   ├── ACPI/                5 个 SSDT
+│   │   │   ├── Drivers/             6 个 .efi
+│   │   │   ├── Kexts/               13 个 kext
+│   │   │   └── Resources/           OpenCanopy 字体与图标
+│   │   └── NullMoth/LogoutHook/     上游附带，本机不用（见说明）
+│   └── EFI目录结构.md               结构详解、为什么禁用某些组件
 ├── patches/
 │   ├── PhxAccel-源码修改.md         EDID + 背光 + VRAM 池
 │   └── PhxBringup-源码修改.md       ptfix
@@ -243,16 +252,20 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 └── evidence/                        系统信息
 ```
 
-**本仓库不含任何第三方二进制**（kext、EFI 驱动、固件）。
-各组件出处与版本见下方「组件来源」。
+**`efi/EFI/` 是完整可用的 EFI**，直接拷贝到 ESP 分区即可引导
+（只需先填自己的 SMBIOS 三码）。
+
+各第三方组件的版权与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) ——
+其中 `AirportItlwm.kext` 和 `IntelBluetoothFirmware.kext` 是 **GPL-2.0**，
+再分发请保留源码链接。
 
 ---
 
 ## 使用前必须做的事
 
-### 1. SMBIOS 三码
+### 1. 填 SMBIOS 三码 ★
 
-`efi/OC/config.plist.example` 里已清空：
+`efi/EFI/OC/config.plist` 里的三码**已替换成占位符**（不能直接用于登录 iCloud）：
 
 ```
 SystemSerialNumber = GENERATE-WITH-GenSMBIOS
@@ -262,26 +275,67 @@ ROM                = 00:00:00:00:00:00
 ```
 
 用 [GenSMBIOS](https://github.com/corpnewt/GenSMBIOS) 生成与 `MacBookPro16,1` 匹配的三码，
-`ROM` 填真实网卡 MAC。
+`ROM` 填真实网卡 MAC（十六进制）。
 
-### 2. 编译两个 kext
+**不填会怎样**：能开机、能进桌面、GPU/Wi-Fi 都正常，
+但 App Store / iMessage / FaceTime 会报「无法验证设备」。
 
-本仓库只提供源码修改说明，二进制需自己编译：
+### 2. PhxAccel 需要自己编译
+
+`efi/EFI/OC/Kexts/PhxBringup.kext` **本仓库已提供**（按 `patches/PhxBringup-源码修改.md` 编译好的）。
+
+但 `PhxAccel.kext` **不在仓库里** —— 它装在 `/Library/Extensions/`，
+属于 Auxiliary Kernel Collection，不是 EFI 组件。需要自行编译：
 
 ```sh
 git clone https://github.com/acidanthera/MacKernelSDK ~/MacKernelSDK
 git clone https://github.com/luuumi-dev/nullarc
 cd nullarc && git checkout 3497d87
 patch -p1 < k8-accel-vbl-timing-dbuf.patch    # 从 izerok/k8-tahoe-hackintosh 获取
-# 应用 patches/ 下的修改
+# 按 patches/PhxAccel-源码修改.md 改三处（EDID / 背光 / VRAM 池）
 cd src/phxaccel && ./build.sh ~/MacKernelSDK
-cd ../phxbringup && ./build.sh ~/MacKernelSDK
+# 装到 /Library/Extensions/ 后用 scripts/kinst.sh 重建 Aux KC
 ```
+
+**没有 PhxAccel 也能开机**（GPU 退回固件 framebuffer），
+只是没有 Metal、没有 GPU 合成、窗口拖动会很卡。
 
 ### 3. BIOS 设置
 
 - UMA Frame Buffer Size = **8G**
 - 开机前确认显示器输入源 = **HDMI**（无 EDID 会退回 4K framebuffer 导致黑屏）
+
+### 4. 刷写 EFI
+
+```sh
+# 1. 先备份现有 EFI（强烈建议）
+sudo diskutil mount disk0s1
+sudo cp -R /Volumes/EFI/EFI ~/EFI.backup.$(date +%Y%m%d)
+
+# 2. 把本仓库的 EFI 覆盖上去
+sudo rm -rf /Volumes/EFI/EFI
+sudo cp -R /path/to/gem12-tahoe-hackintosh/efi/EFI /Volumes/EFI/
+
+# 3. 校验（这一步别省）
+plutil -lint /Volumes/EFI/EFI/OC/config.plist
+grep -A3 'OpenVariableRuntimeDxe' /Volumes/EFI/EFI/OC/config.plist | grep -q '<false/>' \
+  && echo "危险驱动已禁用 OK"
+
+# 4. 卸载并重启
+sudo diskutil unmount /Volumes/EFI
+sudo reboot
+```
+
+**刷完第一次开机的预期**：
+
+| 现象 | 是否正常 |
+|---|---|
+| 出现 OpenCore 图形菜单 | ✅ |
+| 开机能进桌面，但显示 2160×1440 无 HiDPI | ✅ |
+| 有 Metal 3、GPU 合成（需先装 PhxAccel） | ✅ |
+| iMessage 提示无法验证设备 | 正常，三码没填 |
+| 桌面拖动很卡 | 正常，PhxAccel 没装 |
+| **黑屏 / 卡在苹果 logo** | ❌ 见 [docs/05-恢复手册.md](docs/05-恢复手册.md) |
 
 ---
 

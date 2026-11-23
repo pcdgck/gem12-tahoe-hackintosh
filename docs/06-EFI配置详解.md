@@ -1,6 +1,6 @@
 # 06 — EFI 配置详解
 
-`efi/OC/config.plist.example` 里每一项为什么这么填。
+`efi/EFI/OC/config.plist` 里每一项为什么这么填。
 **按"缺了它会怎样"来组织**，方便排查。
 
 > 所有内容都可用 `plutil -lint config.plist` 校验，

@@ -5,16 +5,6 @@
 .Trashes
 .fseventsd
 
-# 第三方二进制（不入库）
-*.kext/
-*.efi
-*.dylib
-*.bundle/
-*.zip
-*.dmg
-*.pkg
-*.aml
-
 # 日志与备份
 *.log
 *.ips
@@ -23,3 +13,16 @@
 *.orig
 config.plist.before-*
 aux.kc.*
+nvram.plist
+nvram.fallback
+opencore-*.txt
+
+# 镜像类大文件
+*.dmg
+*.pkg
+*.iso
+*.tar.gz
+
+# 注意：efi/EFI/ 下的 kext / efi / aml 二进制**故意入库**。
+# 这是本项目的核心交付物 —— 整份 EFI 可以直接刷写。
+# 只有 config.plist 里的 SMBIOS 三码被替换成了占位符。
