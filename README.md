@@ -36,7 +36,12 @@
 | **截屏 / 录屏** | ❌ | nullarc 读回路径未实现 |
 | **AirDrop / Handoff** | ❌ | Intel 网卡无 AWDL |
 | **USB-C 视频输出** | ❌ | USB4 router 无 macOS 驱动 |
+| **硬件视频解码** | ❌ | 无 VCN 驱动，HEVC/H.264 全靠 CPU |
 | 睡眠 / 唤醒 | ⚠️ | 未充分验证 |
+
+> **性能提示**：如果空闲时 CPU 占用很高，先查 `VTDecoderXPCService` ——
+> 系统动态壁纸在无硬件解码的机器上会持续软解 90%+ CPU。
+> 见 [docs/04-已知问题.md](docs/04-已知问题.md) 2.6，`scripts/vtdec-guard.sh` 是现成的看门狗。
 
 ---
 
@@ -215,7 +220,8 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 │   ├── 02-WiFi蓝牙.md               Intel AX210 配置
 │   ├── 03-踩坑记录.md               所有失败尝试与原因分析
 │   ├── 04-已知问题.md               仍然存在的问题
-│   └── 05-恢复手册.md               出问题怎么救
+│   ├── 05-恢复手册.md               出问题怎么救
+│   └── 06-EFI配置详解.md            config.plist 逐项说明
 ├── efi/OC/config.plist.example      脱敏后的 OpenCore 配置
 ├── patches/
 │   ├── PhxAccel-源码修改.md         EDID + 背光 + VRAM 池
