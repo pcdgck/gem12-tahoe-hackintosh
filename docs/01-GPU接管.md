@@ -252,6 +252,40 @@ done 00:24:37
 （CA 图层准备 + Metal 绘制 + `NVMTL_WS_WAIT_COMPLETION` 的忙等）。
 K8 同代硬件空闲也有 ~33%。
 
+### ⚠️ 先排除一个假象：动态壁纸
+
+看到"什么都没开却 90%+ CPU"时，**第一件事不是怀疑显卡，而是查 `VTDecoderXPCService`**：
+
+```sh
+top -l 2 -n 10 -o cpu -stats pid,command,cpu,mem | tail -12
+```
+
+如果看到：
+
+```
+705   VTDecoderXPCServ 93.2  4.1 GB
+```
+
+那是 Tahoe 的动态壁纸 `Tahoe Day`（170 MB HEVC）在**纯 CPU 软解** ——
+因为 780M 没有 macOS 下的 VCN 硬件解码器。
+
+实测杀掉它之后：
+
+| 指标 | 杀之前 | 杀之后 |
+|---|---|---|
+| `VTDecoderXPCService` | 93.2% / 4.1 GB | 退出 |
+| `WindowServer` | 28.8% | **9.8%** |
+| load average | 4.66 | **3.14** |
+
+```sh
+sudo killall WallpaperAerialsExtension
+```
+
+**这不属于 nullarc 的问题**，是任何无硬件解码的黑苹果都会遇到的。
+详见 [04-已知问题.md](04-已知问题.md) 2.6。
+
+### 真正的 nullarc 开销
+
 **缓解手段**：
 
 ```sh

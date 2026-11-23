@@ -220,12 +220,19 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 ├── patches/
 │   ├── PhxAccel-源码修改.md         EDID + 背光 + VRAM 池
 │   └── PhxBringup-源码修改.md       ptfix
-├── scripts/
-│   ├── phxboot.sh                   开机 GPU bring-up 脚本
+├── scripts/                         实际部署的工作脚本（见 scripts/README.md）
+│   ├── README.md                    每个脚本干什么、失败保护怎么工作
+│   ├── phxboot.sh                   开机 GPU bring-up + M2 状态机
+│   ├── local.phxboot.plist          对应 LaunchDaemon
+│   ├── phxdisplay.sh                开机 sysctl（残影/撕裂/timing）
+│   ├── local.phxdisplay.plist       对应 LaunchDaemon
 │   ├── nvrm610.conf                 Metal 插件配置
-│   ├── phxdisplay.sh                开机 sysctl 设置
-│   └── local.phxdisplay.plist       对应 LaunchDaemon
-└── evidence/                        截图与系统信息
+│   ├── bringup5.sh                  PSP + 全部引擎固件加载
+│   ├── full.sh                      完整 bring-up 到 MES
+│   ├── kinst.sh                     重建 Aux KC（带校验）
+│   ├── vtdec-guard.sh               动态壁纸解码看门狗（防 90% CPU）
+│   └── local.vtdecguard.plist       对应 LaunchDaemon
+└── evidence/                        系统信息
 ```
 
 **本仓库不含任何第三方二进制**（kext、EFI 驱动、固件）。

@@ -1,19 +1,30 @@
 # 系统信息快照
 
-生成时间: Tue Nov 24 01:17:14 CST 2026
+生成时间: Tue Nov 24 02:10 CST 2026
+机器: 天钡 GEM12 (Ryzen 7 8845HS / Radeon 780M)
+状态: **可用** —— GPU 合成正常、Wi-Fi/蓝牙正常
 
 ## sw_vers
-ProductName:		macOS
-ProductVersion:		26.7.3
-BuildVersion:		25G342
+
+```
+ProductName:    macOS
+ProductVersion: 26.7.3
+BuildVersion:   25G342
+```
 
 ## CPU
-AMD Ryzen 7 8845HS w/ Radeon 780M Graphics     
+
+```
+AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+```
 
 ## 内存
+
 48 GB
 
 ## GPU
+
+```
 Graphics/Displays:
 
     AMD Radeon 780M:
@@ -37,48 +48,77 @@ Graphics/Displays:
           Online: Yes
           Automatically Adjust Brightness: No
           Connection Type: Internal
+```
 
+> 注意 `Connection Type: Internal` —— 这是 `PhxAMDFB` 把外接 HDMI
+> 当作内建 eDP 面板报告的结果（见 patches/PhxAccel-源码修改.md 的 EDID 部分）。
 
 ## 关键 sysctl
+
+```
 debug.phxfb_dbuf                 = 1
 debug.phxfb_dbuf_state           = 1
 debug.phxfb_timing               = 1
 debug.nvaccel_surface_gpu_on     = 0
 debug.nvaccel_iop_sse            = 1
 debug.nvaccel_iop_vsync          = 1
+debug.nvaccel_iop_ok             = 141673   (GPU 合成帧计数，持续递增)
+debug.phxagdc                    = 1
+```
 
-## PhxBringup 属性
-    | |   |   | | |   "phx-topology-cu" = 12
-    | |   |   | | |   "phx-fb-aper-len" = 268435456
-    | |   |   | | |   "phx-build" = 34
-    | |   |   | | |   "phx-fb-size" = 8589934592
-    | |   |   | | |   "phx-topology-rb" = 4
+## PhxBringup 属性（ioreg）
+
+```
+"phx-build"           = 34
+"phx-stage"           = "E3"
+"phx-fb-size"         = 8589934592      (8 GiB，对应 BIOS UMA 8G)
+"phx-fb-phys"         = 44560285696
+"phx-fb-aper-len"     = 268435456
+"phx-fb-aper-phys"    = 53150220288
+"phx-fb-mc-base"      = 549755813888
+"phx-topology-cu"     = 12              (12 CU，RDNA3 780M 正确)
+"phx-topology-rb"     = 4               (4 RB)
+"phx-hdp-flush-dword" = 3607
+"phx-debug"           = Yes
+"phx-pci-cmd-before"  = 6
+"phx-pci-cmd-after"   = 6
+```
 
 ## 已加载的第三方 kext
-Name (Version)
-as.vit9696.Lilu (1.7.3)
-as.acidanthera.BlueToolFixup (2.7.2)
-com.zxystd.IntelBTPatcher (2.5.1)
-com.dhinakg.AMFIPass (1.4.1)
-com.phx.PhxXhciKick (1.0.0)
-org.acidanthera.NVMeFix (1.1.4)
-as.vit9696.VirtualSMC (1.3.9)
-com.zxystd.AirportItlwm (2.4.0)
-com.dhinakg.USBToolBox.kext (1.2.0)
-org.drip.PhxBringup (1.0.0)
-com.zxystd.IntelBluetoothFirmware (2.5.1)
-com.luuumi.PhxAccel (0.1)
 
-## phxboot 日志（最近 20 行）
-compute: scratch0=0xdeadbeef (want deadbeef) testbuf=0xfeedf00d (want feedf00d) hqd_active=1 rptr=8
-adopt queue -> kr 0x0
-gfx: scratch1=0xdeadbeef (want deadbeef) testbuf=0x6f7a6f7a (want 6f7a6f7a) rptr=0 rptr_wb=968 grbm=0xa800302c cp_stat=0x00000000
-adopt gfx queue -> kr 0x0
-claim -> kr 0x0
-armed and released at 00:55:05; agdc 1
-WindowServer pid 194, frames on the panel 232
-PhxAMDFB armed for the next boot
-done 00:56:39
+```
+as.vit9696.Lilu                       (1.7.3)
+as.acidanthera.BlueToolFixup          (2.7.2)
+com.zxystd.IntelBTPatcher             (2.5.1)
+com.dhinakg.AMFIPass                  (1.4.1)
+com.phx.PhxXhciKick                   (1.0.0)
+org.acidanthera.NVMeFix               (1.1.4)
+as.vit9696.VirtualSMC                 (1.3.9)
+com.zxystd.AirportItlwm               (2.4.0)
+com.dhinakg.USBToolBox.kext           (1.2.0)
+org.drip.PhxBringup                   (1.0.0)
+com.zxystd.IntelBluetoothFirmware     (2.5.1)
+com.luuumi.PhxAccel                   (0.1)     ← Aux KC，不在 EFI
+```
+
+## IORegistry 里的关键对象
+
+```
+PhxAMDFB  <class PhxAMDFB, registered, matched, active>
+  +-o backlight            <class PhxBacklight>         ← patches 第 6 条（PWM 缺失时仍创建）
+  +-o AppleMCCSControlModule
+  +-o AGPM
+  +-o display0 <class IODisplayConnect>
+    +-o AppleBacklightDisplay
+
+NMXAccel  <class NMXAccel, registered, matched, active>
+  "IOPersonalityPublisher"  = "com.luuumi.PhxAccel"
+  "NVAccelEnabledFrom"      = "displayModeDidChange"
+```
+
+## phxboot 日志（成功启动）
+
+```
 == 2026-11-24 01:01:02 phxboot
 PhxAMDFB on the panel: 1
 compute: scratch0=0xdeadbeef (want deadbeef) testbuf=0xfeedf00d (want feedf00d) hqd_active=1 rptr=8
@@ -90,3 +130,73 @@ armed and released at 01:01:11; agdc 1
 WindowServer pid 194, frames on the panel 1129
 PhxAMDFB armed for the next boot
 done 01:02:43
+```
+
+关键行解读：
+
+| 行 | 含义 |
+|---|---|
+| `PhxAMDFB on the panel: 1` | M2 模式，PhxAMDFB 接管了面板 |
+| `scratch0=0xdeadbeef (want deadbeef)` | **计算队列**写入/读回验证通过 |
+| `scratch1=0xdeadbeef (want deadbeef)` | **图形队列**写入/读回验证通过 |
+| `grbm=0xa800302c` | GRBM 状态寄存器非零 = CP 在跑 |
+| `claim -> kr 0x0` | Metal 加速器认领成功 |
+| `armed and released at ...; agdc 1` | 显示 arming 完成，AGDC 生效 |
+| `frames on the panel 1129` | 面板上已合成 1129 帧 |
+| `PhxAMDFB armed for the next boot` | arming 已持久化到 NVRAM |
+
+## 性能实测
+
+### 修复前 vs 修复后（VTDecoder 问题）
+
+后台动态壁纸 `Tahoe Day`（170 MB HEVC）在无硬件解码器时走 CPU 软解：
+
+| 指标 | 修复前 | `killall WallpaperAerialsExtension` 后 |
+|---|---|---|
+| `VTDecoderXPCService` | **93.2% CPU / 4.1 GB** | 退出 |
+| `WindowServer` | 28.8% | **9.8%** |
+| `load average` | 4.66 | **3.14** |
+
+详见 [docs/04-已知问题.md](../docs/04-已知问题.md) 2.6。
+
+### 正常状态下的 CPU
+
+```
+PID   COMMAND          %CPU  MEM
+194   WindowServer     0.3   549 MB
+762   oink-backend     1.5   65 MB
+0     kernel_task      14.5  5.8 GB     ← 含 GPU 页表/Aux KC 占用
+```
+
+`WindowServer` 空闲 0.3% 是**正常值**。如果看到 20%+，先查是不是
+`VTDecoderXPCService` / `WindowServer` 组合（见上）。
+
+## 蓝牙
+
+```
+Address:      EC:4C:8C:F2:F1:AB
+State:        On
+Transport:    USB
+Firmware:     v8641 c8641
+```
+
+## Wi-Fi
+
+```
+Hardware Port: Wi-Fi
+Device:        en3
+MAC:           ec:4c:8c:f2:f1:a7    (Intel AX210, PCI 8086:2723)
+Driver:        AirportItlwm 2.4.0
+支持:          WPA2-Personal / WPA2+WPA3 transition
+不支持:        WPA3-only (SAE)、AWDL
+```
+
+## 已知不可用
+
+| 项目 | 原因 |
+|---|---|
+| 音频 | AMD ACP `1022:15e3` 无 macOS 驱动 |
+| 截屏/录屏 | nullarc 读回路径未实现（`screencapture` 失败） |
+| AirDrop | Intel 网卡无 AWDL |
+| USB-C 视频 | USB4 `1022:1668/1669` 无 macOS 驱动 |
+| 硬件视频解码 | VCN 无驱动，HEVC/H.264 全靠 CPU |
