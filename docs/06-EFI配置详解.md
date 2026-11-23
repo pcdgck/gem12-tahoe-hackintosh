@@ -35,7 +35,7 @@ SSDT-XOSI.aml          Windows 兼容层
 
 ---
 
-## 二、Kexts（13 个）
+## 二、Kexts（14 个）
 
 按加载顺序（`Lilu` 必须最先，依赖它的排后面）：
 
@@ -43,9 +43,9 @@ SSDT-XOSI.aml          Windows 兼容层
 |---|---|---|---|---|
 | 1 | `AppleMCEReporterDisabler` | 1.2 | — | 关掉 MCE 上报，AMD 平台必需 |
 | 2 | `Lilu` | 1.7.3 | — | 补丁框架，其它 kext 的前置 |
-| 3 | `BlueToolFixup` | 2.7.2 | 21.0.0 | **蓝牙协议栈修复**（见 [02](02-WiFi蓝牙.md)） |
-| 4 | `IntelBluetoothFirmware` | 2.5.1 | — | AX210 蓝牙固件上传 |
-| 5 | `IntelBTPatcher` | 2.5.1 | 21.0.0 | 蓝牙补丁 |
+| 3 | `BlueToolFixup` | 2.7.2 | 21.0.0 | **蓝牙协议栈修复**（patch `BlueTool` / `bluetoothd`） |
+| 4 | `IntelBluetoothFirmware` | **2.5.3** | — | AX210 蓝牙固件上传 |
+| 5 | `IntelBTPatcher` | **2.5.3** | 21.0.0 | 蓝牙补丁（patch `IOBluetoothFamily`） |
 | 6 | `AirportItlwm` | 2.4.0 | — | **Wi-Fi**（Tahoe 专用版本） |
 | 7 | `AMFIPass` | 1.4.1 | 20.0.0 | 绕过 AMFI，让未签名 kext 加载 |
 | 8 | `PhxBringup` | 1.0.0 | 25.0.0 | **GPU 底层 bring-up**（PSP/MES/GPUVM） |
@@ -54,9 +54,24 @@ SSDT-XOSI.aml          Windows 兼容层
 | 11 | `VirtualSMC` | 1.3.9 | — | SMC 模拟 |
 | 12 | `USBToolBox` | 1.2.0 | — | USB 端口映射框架 |
 | 13 | `UTBDefault` | 1.0 | — | 端口映射数据 |
+| 14 | **`AppleIGC`** | **1.8** | 21.0.0 | **板载 I226-V 2.5G 网卡**（原生 dext 协商不出链路，见 [03](03-踩坑记录.md) 3.1） |
 
 **`MinKernel` 的意义**：`21.0.0` = macOS 12，`25.0.0` = macOS 26。
 填错会让 kext 在某些系统上完全不加载，而且**日志里不会有任何提示**。
+
+### 两个容易踩的版本坑
+
+**`AppleIGC` 必须用 v1.8，不能用 v1.9。**
+v1.9 的 PR #38 让驱动去监听 MSI 中断源，但 `pci_enable_msi_block()`
+被 `#if 0` 禁掉了、MSI 从未真正启用 → 中断永不触发 → **RX 完全死掉**
+（link 显示 active，`Ipkts` 恒为 0）。详见 [03](03-踩坑记录.md) 3.1。
+
+**`IntelBluetoothFirmware` 必须 ≥ 2.5.2。**
+2.5.2 加入 `LE Data Length Change` 注入，清掉 bluetoothd 的
+`LE_READY_WAIT_FOR_LENGTH` stall —— 没有它，Tahoe 上 **BLE 设备无法被发现**。
+
+> `AppleIGC` 的 `IOProbeScore = 4000` > 原生 `AppleEthernetE1000` 的 `3000`，
+> 所以会自动抢占，**不需要 `e1000=0`**。
 
 > `PhxAccel` **不在这里**。它装在 `/Library/Extensions/`，属于
 > **Auxiliary Kernel Collection**，不进 EFI。见 [scripts/README.md](../scripts/README.md) 的 `kinst.sh`。
@@ -65,6 +80,7 @@ SSDT-XOSI.aml          Windows 兼容层
 
 - `RestrictEvents.kext` — 调用 Lilu `GetVariable` 崩溃
 - `SMCBatteryManager` / `SMCLightSensor` / `BrightnessKeys` — 笔记本专用
+- `IntelBluetoothInjector.kext` — 有 `USBToolBox` 时不需要，且会和 `BlueToolFixup` 冲突
 
 ---
 

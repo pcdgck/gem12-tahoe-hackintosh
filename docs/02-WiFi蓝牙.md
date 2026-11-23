@@ -13,9 +13,15 @@ macOS 原生不支持 Intel 网卡，需要第三方驱动。
 | Kext | 版本 | MinKernel | 作用 |
 |---|---|---|---|
 | `AirportItlwm.kext` | 2.4.0（Tahoe 版） | — | Wi-Fi |
-| `IntelBluetoothFirmware.kext` | 2.5.1 | — | 上传蓝牙固件 |
-| `IntelBTPatcher.kext` | 2.5.1 | 21.0.0 | 蓝牙补丁（Monterey+） |
-| `BlueToolFixup.kext` | 2.7.2 | 21.0.0 | 修 transport 误判 + BlueTool 超时 |
+| `IntelBluetoothFirmware.kext` | **2.5.3** | — | 上传蓝牙固件 |
+| `IntelBTPatcher.kext` | **2.5.3** | 21.0.0 | 蓝牙补丁（patch `IOBluetoothFamily`） |
+| `BlueToolFixup.kext` | 2.7.2 | 21.0.0 | 修 transport 误判 + patch `BlueTool`/`bluetoothd` |
+
+> ⚠️ **`IntelBluetoothFirmware` 必须 ≥ 2.5.2**。
+> 2.5.2 加入 `LE Data Length Change` 注入，清掉 `bluetoothd` 的
+> `LE_READY_WAIT_FOR_LENGTH` stall —— 没有它，**Tahoe 上 BLE 设备无法被发现**
+> （经典蓝牙可能还行，但 BLE 耳机会搜不到）。
+> 本机实测 2.5.1 搜不到任何设备，升到 2.5.3 后 BLE 广播能正常收到了。
 
 **顺序很重要**（`Kernel/Add` 数组）：
 
@@ -211,3 +217,35 @@ log show --predicate 'process == "bluetoothd"' --last 5m | grep -iE "error|fail|
 4. **USB 端口映射**：蓝牙在内部 USB 2.0 端口上，
    `UTBDefault.kext`（通用映射）足够，不需要定制 `UTBMap`。
    但如果以后换成定制映射，记得把蓝牙那个端口标为 `internal`（255）。
+
+5. **`IntelBluetoothFirmware` 必须 ≥ 2.5.2**（Tahoe 必需）：
+   2.5.2 前没有 `LE Data Length Change` 注入，`bluetoothd` 会卡在
+   `LE_READY_WAIT_FOR_LENGTH`，**BLE 设备完全搜不到**。
+
+6. **`bluetoothd` 偶发崩溃是正常现象**：
+   `BlueToolFixup` 必须在内存里 patch `bluetoothd` 才能让第三方蓝牙工作，
+   这破坏了代码页签名，Tahoe 的签名强制检查会 `SIGKILL` 它：
+
+   ```
+   EXC_BAD_ACCESS  SIGKILL (Code Signature Invalid)
+   termination: CODESIGNING / Invalid Page
+   栈: WPDaemon -[WPDScanManager centralManager:didDiscoverPeripheral:...]
+   ```
+
+   `launchd` 会立刻重启它，表现是蓝牙瞬断后自动恢复。
+   `BlueToolFixup 2.7.2` 已是最新版，无法避免。
+
+7. **搜不到设备时先看 RSSI，不要急着换 kext**：
+   如果控制器 `State: On`、固件加载正常、扫描也启动了，但
+   `devicesFound: 0`，看实际收到的广播 RSSI：
+
+   ```sh
+   sudo log show --last 2m --predicate 'subsystem == "com.apple.bluetooth"' \
+     | grep -oE 'RSSI -[0-9]+' | sort -u
+   ```
+
+   - **-40 ~ -70**：信号正常，问题在软件
+   - **-90 以下**：天线/射频物理问题，换 kext 没用（本机就是这种情况）
+
+   注意日志里的 `rssi -45` / `rssi -50` 是**扫描过滤阈值**，不是实际信号。
+   详见 [04-已知问题.md](04-已知问题.md) 2.7。

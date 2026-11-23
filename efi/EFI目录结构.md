@@ -3,7 +3,7 @@
 从 GEM12 实际 EFI 分区导出（2026-11-24），**完整内容在 `efi/EFI/` 目录下，可直接刷写**。
 唯一被改动的是 `OC/config.plist` 里的 SMBIOS 三码（已替换为占位符）。
 
-总体积 **33 MB**，共 106 个文件。
+总体积 **33.9 MB**，共 110 个文件。
 
 ```
 EFI/
@@ -34,10 +34,11 @@ EFI/
     ├── Kexts/
     │   ├── AMFIPass.kext                         1.4.1
     │   ├── AirportItlwm.kext                     2.4.0
-    │   ├── AppleMCEReporterDisabler.kext         1.2
+    │   ├── AppleIGC.kext                         1.8      ← I226-V 2.5G 网卡
+    │   ├── AppleMCEReporterDisabler.kext          1.2
     │   ├── BlueToolFixup.kext                    2.7.2
-    │   ├── IntelBTPatcher.kext                   2.5.1
-    │   ├── IntelBluetoothFirmware.kext           2.5.1
+    │   ├── IntelBTPatcher.kext                   2.5.3
+    │   ├── IntelBluetoothFirmware.kext           2.5.3
     │   ├── Lilu.kext                             1.7.3
     │   ├── NVMeFix.kext                          1.1.4
     │   ├── PhxBringup.kext                       1.0.0（自编译）

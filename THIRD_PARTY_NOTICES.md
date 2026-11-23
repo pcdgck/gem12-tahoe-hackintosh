@@ -32,9 +32,10 @@
 | `OC/Kexts/AppleMCEReporterDisabler.kext` | 2 KB | 社区 | 见上游 |
 | `OC/Kexts/PhxXhciKick.kext` | 48 KB | kevin8717/TongFang-7840HS-Hackintosh | 见上游 |
 | `OC/Kexts/BlueToolFixup.kext` | 41 KB | acidanthera/BrcmPatchRAM | BSD-3-Clause |
-| `OC/Kexts/IntelBluetoothFirmware.kext` | **10.7 MB** | lshbluesky/IntelBluetoothFirmware | GPL-2.0 |
-| `OC/Kexts/IntelBTPatcher.kext` | 43 KB | 同上 | GPL-2.0 |
+| `OC/Kexts/IntelBluetoothFirmware.kext` | **11.2 MB** | lshbluesky/IntelBluetoothFirmware | GPL-2.0 |
+| `OC/Kexts/IntelBTPatcher.kext` | 40 KB | 同上 | GPL-2.0 |
 | `OC/Kexts/AirportItlwm.kext` | **15.2 MB** | laobamac/itlwm | GPL-2.0 |
+| `OC/Kexts/AppleIGC.kext` | 109 KB | SongXiaoXi/AppleIGC | GPL-2.0 |
 | `OC/Kexts/PhxBringup.kext` | 78 KB | **本项目自编译** | 见下方 nullarc 段落 |
 | `OC/ACPI/*.aml` (5 个) | 共 1.8 KB | 本项目编写 / 社区 SSDT | MIT（本项目部分） |
 
@@ -42,16 +43,17 @@
 > 加上 `patches/PhxBringup-源码修改.md` 的改动自行编译的。**
 > 源码修改说明在本仓库，二进制随之分发，但**原始代码的许可仍归上游**。
 
-### ⚠️ 两个体积较大的 GPL 组件
+### ⚠️ 三个体积较大 / 重要的 GPL 组件
 
-`AirportItlwm.kext`（15.2 MB）和 `IntelBluetoothFirmware.kext`（10.7 MB）
-均以 **GPL-2.0** 分发。GPL-2.0 要求分发二进制时提供对应源码。
-源码地址：
+`AirportItlwm.kext`（15.2 MB）、`IntelBluetoothFirmware.kext`（11.2 MB）
+和 `AppleIGC.kext`（109 KB）均以 **GPL-2.0** 分发。
+GPL-2.0 要求分发二进制时提供对应源码。源码地址：
 
 - https://github.com/laobamac/itlwm（Tahoe 分支）
 - https://github.com/lshbluesky/IntelBluetoothFirmware
+- https://github.com/SongXiaoXi/AppleIGC（本仓库用的是 **v1.8**，不是最新版，原因见 docs/03）
 
-**如果你要再分发本仓库，请保留这些来源链接，或改为让使用者自行下载这两个 kext。**
+**如果你要再分发本仓库，请保留这些来源链接，或改为让使用者自行下载这些 kext。**
 
 ### 固件文件
 

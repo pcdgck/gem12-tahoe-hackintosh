@@ -30,10 +30,10 @@
 | 帧同步 | ✅ | vbl-timing，60 Hz |
 | 残影 | ✅ | dbuf 双缓冲 |
 | **Wi-Fi** | ✅ | Intel AX210，`AirportItlwm` 2.4.0 |
-| **蓝牙** | ✅ | Intel AX210，`BlueToolFixup` + `IntelBluetoothFirmware` 2.5.1 |
+| **蓝牙** | ⚠️ | Intel AX210，驱动/固件/扫描全部正常，但**射频信号极弱**（RSSI -90~-106），搜不到设备 —— 见 [docs/04](docs/04-已知问题.md) 2.7 |
 | USB | ✅ | XHC0，6 设备正常 |
-| **有线网卡** | ✅ | **板载 Intel I226-V ×2，原生驱动**（`AppleEthernetE1000` dext） |
-| USB 网卡 | ✅ | AX88179B，装机/备用（Recovery 里需要它，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
+| **有线网卡** | ✅ | **板载 Intel I226-V ×2，2.5G**（`AppleIGC` v1.8，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
+| USB 网卡 | ✅ | AX88179B，装机时用（Recovery 里需要它，见 [docs/03](docs/03-踩坑记录.md) 3.2） |
 | 存储 | ✅ | NVMe + APFS |
 | CPU 电源管理 | ✅ | X86PlatformPlugin |
 | **音频** | ❌ | AMD ACP（`1022:15e3`）无 macOS 驱动 |
@@ -59,7 +59,7 @@
 | 内存 | 48 GB DDR5-5600 |
 | 存储 | aigo NVMe SSD P7000Z 2TB（整盘安装 macOS） |
 | 无线 | Intel AX210（`8086:2723`，Wi-Fi 6E + BT 5.3） |
-| 有线 | 板载 **Intel I226-V ×2**（2.5G，`8086:125C`，**macOS 原生驱动**）<br>+ USB AX88179B（装机时用，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
+| 有线 | 板载 **Intel I226-V ×2**（2.5G，`8086:125C`）<br>驱动用 `AppleIGC` v1.8（原生 dext 在本机协商不出链路，见 [docs/03](docs/03-踩坑记录.md) 3.1）<br>+ USB AX88179B（装机时用） |
 | 显示 | **仅外接 HDMI**，2160×1440@60（固件 GOP 点亮的单一模式） |
 | 系统 | macOS Tahoe **26.7.3**（build `25G342`） |
 | SMBIOS | `MacBookPro16,1` |
@@ -355,9 +355,10 @@ sudo reboot
 | PhxXhciKick | [kevin8717/TongFang-7840HS-Hackintosh](https://github.com/kevin8717/TongFang-7840HS-Hackintosh) | 1.0.0 |
 | USBToolBox / UTBDefault | [USBToolBox](https://github.com/USBToolBox/kext) | 1.2.0 |
 | **AirportItlwm** | [laobamac/itlwm](https://github.com/laobamac/itlwm) | 2.4.0（Tahoe） |
-| **IntelBluetoothFirmware** | [lshbluesky/IntelBluetoothFirmware](https://github.com/lshbluesky/IntelBluetoothFirmware) | 2.5.1 |
+| **AppleIGC** | [SongXiaoXi/AppleIGC](https://github.com/SongXiaoXi/AppleIGC) | **v1.8**（v1.9 有 MSI bug，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
+| **IntelBluetoothFirmware** | [lshbluesky/IntelBluetoothFirmware](https://github.com/lshbluesky/IntelBluetoothFirmware) | **2.5.3**（2.5.2 起含 Tahoe BLE 修复） |
 | **BlueToolFixup** | [Acidanthera/BrcmPatchRAM](https://github.com/acidanthera/BrcmPatchRAM) | 2.7.2 |
-| IntelBTPatcher | 同上 | 2.5.1 |
+| IntelBTPatcher | lshbluesky fork | **2.5.3** |
 
 **特别感谢 [izerok/k8-tahoe-hackintosh](https://github.com/izerok/k8-tahoe-hackintosh)**
 ——同一代硬件（KTHIN K8，Ryzen 7 H 255 + 780M）的完整记录，
