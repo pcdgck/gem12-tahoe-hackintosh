@@ -9,6 +9,9 @@
 ![os](https://img.shields.io/badge/macOS-26.7.3-000000)
 ![oc](https://img.shields.io/badge/OpenCore-1.0.x-4B8BBE)
 
+**[⬇️ 下载完整 EFI（29.7 MB zip）](https://github.com/pcdgck/gem12-tahoe-hackintosh/releases/download/efi-v1.0/EFI-GEM12-Tahoe.zip)**
+· [仓库内 `efi/EFI/`](efi/EFI) · [EFI 结构说明](efi/EFI目录结构.md)
+
 ---
 
 ## 先说结论
