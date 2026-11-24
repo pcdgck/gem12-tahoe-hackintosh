@@ -103,87 +103,20 @@ WindowServer crash:
 
 ## 修复路线（7 个关键点）
 
-按依赖顺序，每一环都不可或缺：
+完整排查过程见 [docs/01-GPU接管.md](docs/01-GPU接管.md)，这里是速查表：
 
-### 1. 用对代码基线
+| # | 关键点 | 缺了会怎样 |
+|---|---|---|
+| 1 | **代码基线**：`nullarc @ 3497d87` + K8 的 `vbl-timing-dbuf.patch` | 用官方 release 直接 WindowServer 崩溃 |
+| 2 | **PhxBringup ptfix**：`kHiTotal` 3840M / `kGttCap` 2048M / `kPtChunks` 256 | VRAM 池只有 512 MB |
+| 3 | **BIOS** `UMA Frame Buffer Size = 8G` | 申请 2 GB 物理连续内存失败，降级到 512 MB |
+| 4 | **PhxAccel VRAM 池对齐**：`{ 2048, 1024, 512 }` MB，`kVramCap 3840` | 与第 2 步的 `kHiTotal` 不匹配 |
+| 5 | **主 head 提供 EDID** ★ | `CoreDisplay_CreateDisplayForCGXDisplayDevice` 断言 → SIGABRT |
+| 6 | **PWM 不可用时仍创建 `PhxBacklight`** ★ | CoreDisplay 拿不到亮度控制对象 |
+| 7 | **`PhxGPU` 目录 `chmod -R 755`** ★ | WindowServer（uid 88）加载不了 Metal 插件 → 显示器 offline |
 
-```
-luuumi-dev/nullarc @ 3497d87  +  izerok 的 k8-accel-vbl-timing-dbuf.patch
-```
-
-**不要**用官方 `v0.4.0-alpha` release，也**不要**用 `hdmi-fb2` 分支：
-
-- 官方 release（`phx-build 34`）不含 vbl-timing / dbuf / `PhxHDMIHead`
-- `hdmi-fb2` 分支走的是另一套（head 1 + `phxfb1_config`）方案，未验证
-- K8 补丁必须打在 `3497d87` 上才能干净应用（其它版本冲突严重）
-
-详见 [docs/01-GPU接管.md](docs/01-GPU接管.md)。
-
-### 2. PhxBringup 页表与显存池扩容（ptfix）
-
-```cpp
-kHiTotal  : 1536 MiB → 3840 MiB
-kGttCap   :  512 MiB → 2048 MiB
-kGttMaxBo :  256 MiB → 1024 MiB
-kPtChunks :   64     →  256        // 每进程 GPU 页表 ≈8 GiB
-```
-
-见 [patches/PhxBringup-源码修改.md](patches/PhxBringup-源码修改.md)。
-
-### 3. BIOS 调大 UMA Frame Buffer 到 8 GB
-
-`Advanced → AMD CBS → NBIO Common Options → GFX Configuration → UMA Frame Buffer Size = 8G`
-
-**没有这一步，`PhxAccel` 申请 2 GB 物理连续内存会失败，降级到 512 MB。**
-
-### 4. PhxAccel VRAM 池对齐
-
-```cpp
-kPoolTry : { 512, 256, 128 } MB → { 2048, 1024, 512 } MB
-kVramCap : 1024 MB → 3840 MB
-```
-
-**必须和第 2 步的 `kHiTotal` 匹配，否则两边不一致。**
-
-### 5. 主 head 提供 EDID ★
-
-`CoreDisplay` 创建显示设备时必须能读到 EDID。原代码主 head：
-
-```cpp
-bool hasDDCConnect(IOIndex) override { return false; }
-IOReturn getDDCBlock(...) override { return kIOReturnUnsupported; }
-```
-
-改为返回一份 128 字节的 1920×1080@60 EDID。
-
-### 6. PWM 不可用时仍创建背光处理器 ★
-
-`CoreDisplay::Display` 构造时会调用 `InitializeBrightnessControl`。
-外接显示器没有 PWM 背光，原代码直接跳过创建 `PhxBacklight`，
-导致 CoreDisplay 拿不到亮度控制对象。
-
-改为：即使 PWM 读不到，也创建 handler（亮度固定 `kBlMax`）。
-
-### 7. PhxGPU 目录权限 755 ★
-
-**这是最后一块拼图，也是最容易被忽略的。**
-
-nullarc 的安装脚本把 `PhxGPU/` 下的文件设成了 `700`/`600`（仅 root 可读）。
-但 WindowServer 以 userID 88 运行，无法加载 Metal 插件：
-
-```
-WindowServer: [ERROR] Cannot find executable for CFBundle
-  .../PhxGPU/NVMTLDriver.bundle (not loaded)
-WindowServer: [ERROR] Setting offline display 0x00000000 main
-```
-
-修正：
-
-```sh
-sudo chmod -R 755 /System/Library/CoreServices/CoreTypes.bundle/Contents/Library/PhxGPU
-```
-
-**改完这一条，显示器从 offline 变 online，GPU 合成立刻工作。**
+> 第 5~7 项是本项目对 nullarc 的**源码修改**，
+> 详见 [patches/PhxAccel-源码修改.md](patches/PhxAccel-源码修改.md)。
 
 ---
 
