@@ -4,8 +4,9 @@
 
 ```
 /Users/Shared/gpu/            工作目录（phxboot.sh、bringup5.sh、full.sh、kinst.sh、fw/、phxctl/、backup/）
-/usr/local/bin/               phxdisplay.sh、vtdec-guard.sh
-/Library/LaunchDaemons/       local.phxboot / local.phxdisplay / local.vtdecguard
+/usr/local/bin/               phxdisplay.sh、vtdec-guard.sh、gpuclk.sh
+/usr/local/libexec/           gpucg.sh
+/Library/LaunchDaemons/       local.phxboot / local.phxdisplay / local.vtdecguard / local.gpuclk
 /Library/GPUBundles/nvmtl/    nvrm610.conf + Mesa RADV 的 dylib
 ```
 
@@ -166,7 +167,64 @@ bash build-appleigc.sh
 
 ---
 
-## 六、`phxctl/` 与 `mesboot`
+## 六、`gpuclk.sh` + `gpucg.sh` — GPU 限频与时钟门控
+
+**来源**：[QiRanChenk/MECHREVO-WUJIE15XA-8745HS-Hackintosh](https://github.com/QiRanChenk/MECHREVO-WUJIE15XA-8745HS-Hackintosh)
+（8745HS + 780M，同代硬件）的 `tools/gpuclk` 与 `tools/gpucg`。
+
+**背景**：`nullarc` 让 780M 的 GFX 时钟**固定 2600 MHz**（多耗约 25 W），
+并且所有时钟门控都保持复位默认值。
+
+**做法**：
+
+```sh
+# 1. SMU SetSoftMaxGfxClk(0x1B) 把上限压到 800 MHz
+phxctl smu 0x1b 800
+phxctl smu 0x17 0
+
+# 2. 打开 MGCG / CGCG / CGLS（约 2 W）
+gpucg.sh all        # status | mgcg | cgcg | all | off
+```
+
+**本机实测**（GEM12，2160×1440）：
+
+| 指标 | 限频前 | 限频后 |
+|---|---|---|
+| 帧率 | 47 fps | **47 fps**（无变化） |
+| `WindowServer` CPU | 13.1% | 14.1% |
+| 桌面观感 | — | 无可感知差异 |
+
+> SMU 返回 `resp 0x01 (OK) out 0x320`（0x320 = 800）即生效。
+
+**不会解决**的问题（别抱期望）：
+`SafeEjectGPUService` 仍会卡死 100% CPU —— 那是 nullarc 的 ioctl 缺陷，与 GPU 负载无关。
+
+**跳过开关**：
+
+| 文件 | 作用 |
+|---|---|
+| `/Users/Shared/gpu/gpuclk-off` | 整体跳过限频 |
+| `/Users/Shared/gpu/gpucg-off` | 只跳过时钟门控 |
+
+频率可用环境变量覆盖：`GPUCLK_MHZ=1600`。
+
+**安装**：
+
+```sh
+sudo mkdir -p /usr/local/libexec
+sudo cp gpuclk.sh /usr/local/bin/ && sudo chmod 755 /usr/local/bin/gpuclk.sh
+sudo cp gpucg.sh  /usr/local/libexec/ && sudo chmod 755 /usr/local/libexec/gpucg.sh
+sudo cp local.gpuclk.plist /Library/LaunchDaemons/
+sudo chown root:wheel /Library/LaunchDaemons/local.gpuclk.plist
+sudo launchctl load -w /Library/LaunchDaemons/local.gpuclk.plist
+```
+
+日志 `/var/log/gpuclk.log`。
+脚本会在 `NMXAccel` 出现后再等 15 秒才动手，避免和 `phxboot` 抢寄存器。
+
+---
+
+## 七、`phxctl/` 与 `mesboot`
 
 nullarc 源码树里编译出来的用户态调试工具（`phxctl` 约 18 KB、`mesboot` 约 59 KB），
 通过 `sysctl`/ioctl 直接操作 GPU 寄存器，**本仓库不含二进制**。
@@ -180,7 +238,7 @@ cd nullarc/src/mesboot  && make   # 产出 mesboot
 
 ---
 
-## 七、路径约定
+## 八、路径约定
 
 所有脚本假设 `$HOME=/Users/Shared`、工作目录 `$G=/Users/Shared/gpu`。
 `phxboot.sh` 里显式 `export HOME=/Users/Shared`（LaunchDaemon 默认 `HOME` 是 `/var/root`）。

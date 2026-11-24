@@ -194,7 +194,12 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 │   ├── kinst.sh                     重建 Aux KC（带校验）
 │   ├── vtdec-guard.sh               动态壁纸解码看门狗（防 90% CPU）
 │   ├── local.vtdecguard.plist       对应 LaunchDaemon
-│   └── memtest.c                    内存压力测试（排除内存故障用）
+│   ├── gpuclk.sh                    GPU 限频 800MHz + 调 gpucg
+│   ├── gpucg.sh                     启用 780M 时钟门控（MGCG/CGCG）
+│   ├── local.gpuclk.plist           对应 LaunchDaemon
+│   ├── memtest.c                    内存压力测试（排除内存故障用）
+│   ├── build-appleigc.sh            AppleIGC 手工编译脚本
+│   └── kmod_info.c                  AppleIGC 必需的 _kmod_info 定义
 └── evidence/                        系统信息
 ```
 
@@ -305,6 +310,19 @@ sudo reboot
 **特别感谢 [izerok/k8-tahoe-hackintosh](https://github.com/izerok/k8-tahoe-hackintosh)**
 ——同一代硬件（KTHIN K8，Ryzen 7 H 255 + 780M）的完整记录，
 本文档的很多结论直接来自它。
+
+**另一份很有参考价值的同代硬件记录**：
+[QiRanChenk/MECHREVO-WUJIE15XA-8745HS-Hackintosh](https://github.com/QiRanChenk/MECHREVO-WUJIE15XA-8745HS-Hackintosh)
+（机械革命 无界15XA，R7 8745HS + 780M，Tahoe）。
+
+它的完成度比本项目高很多，**已解决**：外接显示（HDMI + USB-C 双口、热插拔）、
+睡眠（S4 休眠）、声卡、有线网卡（DEXT）、触摸板、电池、
+以及大量功耗优化（GPU 限频/时钟门控/SDMA unhalt/CPU 调频）。
+
+本项目从中借鉴了 **GPU 限频与时钟门控**（`scripts/gpuclk.sh` + `gpucg.sh`）——
+限频到 800 MHz 后帧率不变，但省掉约 25 W。
+它的 `tools/` 目录里还有 `hdmi`（第二帧缓冲）、`phxwake`（唤醒后重新初始化 GPU）、
+`powerbar`（菜单栏功耗面板）等，值得后续研究。
 
 ---
 
