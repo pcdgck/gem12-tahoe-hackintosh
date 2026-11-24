@@ -1,8 +1,16 @@
 # 系统信息快照
 
-采集时间: 2026-11-24 16:56 CST
+采集时间: 2026-11-24 18:27 CST
 机器: 天钡 GEM12 (Ryzen 7 8845HS / Radeon 780M)
-**当前档位: 稳定档（GPU 接管关闭）** —— 能显示、能上网，但界面无 GPU 合成
+
+**当前档位: 流畅档（GPU 接管开启）**
+
+- ✅ Metal 3 / 8 GB VRAM / 2160×1440 / 桌面流畅
+- ⚠️ Safari 及大批系统进程被 SIGKILL（见「稳定性」）
+- ⚠️ `SafeEjectGPUService` 100% CPU
+- ⚠️ 关机/重启时 `pmap` panic
+
+> 两个档位的取舍见 [docs/07-稳定性与崩溃分析.md](../docs/07-稳定性与崩溃分析.md)。
 
 ## sw_vers
 
@@ -39,34 +47,30 @@ AMD Radeon 780M:
   Online: Yes
 ```
 
-**但当前帧缓冲是固件帧缓冲**：
+**当前由 PhxAMDFB 接管扫描输出**：
 
 ```
-+-o .Display_boot  <class IONDRVFramebuffer, registered, matched, active>
++-o PhxAMDFB  <class PhxAMDFB, registered, matched, active, busy 0 (7518 ms)>
 ```
 
-不是 `PhxAMDFB` → 说明 GPU 接管关闭，WindowServer 走 CPU 合成，**界面有卡顿**。
+### 关键 sysctl（流畅档）
+
+```
+debug.nvaccel_iop_ok        10131      (GPU 合成帧计数，持续增长)
+debug.phxfb_dbuf_state      1          (双缓冲)
+debug.phxagdc               1          (AGDC)
+debug.phxfb_timing          1
+debug.nvaccel_surface_gpu_on 0
+debug.nvaccel_iop_sse       1
+debug.nvaccel_iop_vsync     1
+```
 
 ### 两个档位
 
-| 档位 | 帧缓冲 | 界面 | 稳定性 |
+| 档位 | 帧缓冲 | 界面 | 代价 |
 |---|---|---|---|
-| 流畅档 | `PhxAMDFB` + `NMXAccel` | Metal 3，拖动 57 fps | ❌ 偶发 pmap panic |
-| **稳定档（当前）** | `IONDRVFramebuffer` | CPU 合成，卡顿 | ✅ 可长期运行 |
-
-切换方法见 [docs/07-稳定性与崩溃分析.md](../docs/07-稳定性与崩溃分析.md)。
-
-`PhxAccel.kext`（0.1）仍然加载（bring-up 代码在跑），只是不接管面板。
-
-## 关键 sysctl（稳定档下为空/0）
-
-```
-debug.nvaccel_iop_ok       0 或不存在   (GPU 合成帧计数)
-debug.phxfb_dbuf_state     不存在       (双缓冲未启用)
-debug.phxagdc              不存在
-```
-
-> 这些值在流畅档下应该是：`iop_ok` 持续递增、`dbuf_state = 1`、`phxagdc = 1`。
+| **流畅档（当前）** | `PhxAMDFB` + `NMXAccel` | Metal 3，拖动 57 fps | Safari 等进程崩、SafeEjectGPU 满载、关机 panic |
+| 稳定档 | `IONDRVFramebuffer` | CPU 合成，卡顿 | 无（但界面卡） |
 
 ## 已加载的第三方 kext
 
@@ -85,8 +89,8 @@ com.zxystd.IntelBluetoothFirmware     (2.5.3)
 com.luuumi.PhxAccel                   (0.1)     ← Aux KC，不在 EFI
 ```
 
-> **`com.sxx.AppleIGC` 未加载** —— config.plist 里 `Enabled = false`。
-> 原因见下文「网卡」。
+> **`com.sxx.AppleIGC` 未加载** —— EFI 里保留但 `Enabled = false`。
+> 四个方案全部失败，见下文「网卡」。
 
 ## 网卡
 
@@ -109,18 +113,16 @@ Intel(R) I226 V:
 en0   status: inactive   media: autoselect (none)     ← 无链路
 ```
 
-原生 `AppleEthernetE1000` 在本机**协商不出 PHY 链路**，
-社区驱动 `AppleIGC` 三个版本依次试过都有问题：
+四个方案依次试过：
 
 | 方案 | 链路 | RX | 结果 |
 |---|---|---|---|
 | 原生 `AppleEthernetE1000` | ❌ | — | PHY 协商不出链路 |
-| `AppleIGC` v1.9 | ✅ | ❌ | RX 完全死（`Ipkts` 恒 0） |
+| `AppleIGC` v1.9 | ✅ | ❌ | RX 完全死（MSI 从未启用） |
 | `AppleIGC` v1.8 | ✅ | ✅ | `M_PKTHDR` 内核 panic |
-| `AppleIGC` 1.9-gem12（自编译） | ✅ | ✅ | `pmap` 内存损坏 panic |
+| `AppleIGC` 自编译（v1.9+补丁） | — | — | 两个编译坑导致**从未加载**，修好后被系统拒绝加载 |
 
-完整排查过程见 [docs/03-踩坑记录.md](../docs/03-踩坑记录.md) 3.1，
-补丁与编译方法见 [patches/AppleIGC-源码修改.md](../patches/AppleIGC-源码修改.md)。
+完整过程见 [docs/03-踩坑记录.md](../docs/03-踩坑记录.md) 3.1。
 
 ### USB 网卡 AX88179B（推荐的有线方案）
 
@@ -129,7 +131,7 @@ AX88179B:
   Bus:            USB
   Vendor:         ASIX (0x0b95)
   Product ID:     0x1790
-  Driver:         com.apple.driver.usb.cdc.ncm   (原生驱动)
+  Driver:         com.apple.driver.usb.cdc.ncm   (原生驱动，免驱)
   BSD Device:     en2
   MAC:            9c:69:d3:d2:00:53
 ```
@@ -148,6 +150,8 @@ IP:            192.168.1.209
 支持:          WPA2-Personal / WPA2+WPA3 transition
 不支持:        WPA3-only (SAE)、AWDL
 ```
+
+外网验证：`curl https://www.apple.com` → HTTP 200。
 
 ## 蓝牙
 
@@ -178,19 +182,62 @@ kext：`BlueToolFixup` 2.7.2 + `IntelBluetoothFirmware` **2.5.3** + `IntelBTPatc
 
 ## 稳定性
 
-2026-11-23 18:14 ~ 11-24 05:22 期间共 **12 个内核 panic**：
+### 内核 panic：16 次
 
-| 类型 | 次数 |
+| 类型 | 次数（约） |
 |---|---|
-| **`pmap` 页表损坏** | **5** |
+| **`pmap` 页表损坏** | 最多 |
+| 链表损坏 | 2 |
 | page fault / general protection | 4 |
 | 网络栈 mbuf | 2 |
 | APFS namedstream | 1 |
 
-- `pmap` 类崩溃在 **AppleIGC 装上之前**就已出现（11-23 18:14）
-- 崩溃进程随机（`FamilyControlsAgent` / `CacheDeleteExtension` / `calaccessd`）
-- 内存测试已排除内存条（350 GB 零错误）
-- **最可能是 `nullarc` 的 GPU 接管（GPUVM 页表操作）导致**
+**关键**：panic **都发生在关机/重启阶段**，不是运行中。
+`Previous shutdown cause: 5` 每次开机都能看到。
+
+### 用户态进程被 SIGKILL（流畅档专属）
+
+开启 GPU 接管后：
+
+| 进程 | 崩溃次数 |
+|---|---|
+| `SafariBookmarksSyncAgent` | 27 |
+| `AuthenticationServicesAgent` | 25 |
+| `assistantd` | 24 |
+| `CommCenter` | 22 |
+| `axassetsd` | 7 |
+| `sharingd` | 6 |
+| `com.apple.dock.extra` | 6 |
+| `acountsd` | 5 |
+| **`Safari`** | **5** |
+| `siriactionsd` | 4 |
+
+崩溃特征：
+
+```
+EXC_BAD_ACCESS / SIGKILL (Code Signature Invalid)
+CODESIGNING / Invalid Page
+栈：libobjc readClass → map_images → _objc_init（死在动态库加载阶段）
+```
+
+内核日志：
+
+```
+CODE SIGNING: cs_invalid_page(0x7ff82742f000): ... denying page sending SIGKILL
+  ... rejecting invalid page ... in file ".../dyld/dyld_shared_cache_x86_64h"
+```
+
+**地址每次都一样** → 同一个被写脏的共享缓存页。
+原因：`nullarc` 改写内存页，落在 `dyld_shared_cache` 里触发签名校验。
+
+### SafeEjectGPUService 100% CPU
+
+```
+PID 1011  99.2%  .../SafeEjectGPUService.xpc/Contents/MacOS/SafeEjectGPUService
+```
+
+「安全弹出 GPU」菜单栏组件，卡在 GPU 驱动的 ioctl 里永不返回。
+`kill -9` 无效（PID 不变，D state）。
 
 完整分析见 [docs/07-稳定性与崩溃分析.md](../docs/07-稳定性与崩溃分析.md)。
 
@@ -203,5 +250,6 @@ kext：`BlueToolFixup` 2.7.2 + `IntelBluetoothFirmware` **2.5.3** + `IntelBTPatc
 | AirDrop | Intel 网卡无 AWDL |
 | USB-C 视频 | USB4 `1022:1668/1669` 无 macOS 驱动 |
 | 硬件视频解码 | VCN 无驱动，HEVC/H.264 全靠 CPU |
-| 板载有线网卡 | I226-V 无可用驱动（见上） |
+| 板载有线网卡 | I226-V 无可用驱动 |
 | 蓝牙 | 射频信号极弱（天线问题） |
+| **Safari（流畅档下）** | GPU 接管导致代码签名校验失败，被 SIGKILL |

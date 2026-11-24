@@ -16,25 +16,27 @@
 
 ## 先说结论
 
-**这台机器能跑 macOS Tahoe 桌面，但必须在「流畅」和「稳定」之间二选一。**
+**这台机器能跑 macOS Tahoe 桌面，但必须在「流畅」和「可用」之间二选一。**
 
-- **流畅档**：GPU 接管 + Metal 3 + 桌面合成，拖动 57 fps —— 但会偶发 `pmap` 页表损坏 panic
-- **稳定档（默认）**：固件帧缓冲，界面明显卡顿 —— 可长期运行
+- **流畅档**（GPU 接管）：Metal 3、拖动 57 fps —— 但 **Safari 等大批系统进程会被 SIGKILL**，
+  每次关机还会留 `pmap` panic 记录
+- **稳定档**（默认）：固件帧缓冲，界面卡顿 —— 但系统干净，应用正常
 
-原因是依赖的 GPU 驱动 `nullarc` 还是 alpha 阶段，上游自己就写明
-「可能导致内核 panic、数据损坏」。详见 [docs/07-稳定性与崩溃分析.md](docs/07-稳定性与崩溃分析.md)。
+根因是依赖的 GPU 驱动 `nullarc` 还是 alpha 阶段，**会改写内存页**：
+写脏的页落在 `dyld_shared_cache` 里，Tahoe 的代码签名校验就会杀掉相关进程。
+详见 [docs/07-稳定性与崩溃分析.md](docs/07-稳定性与崩溃分析.md)。
 
 | 子系统 | 状态 | 说明 |
 |---|---|---|
 | 引导 | ✅ | OpenCore，内置盘独立启动 |
-| **GPU / 显示** | ⚠️ | Radeon 780M，**默认关闭接管**（`iondrvframebuffer`）<br>开启后 8 GB VRAM / Metal 3 / 2160×1440，但**有 panic 风险** |
-| **桌面合成** | ⚠️ | 开启接管时有；默认无 → 界面卡顿 |
-| **稳定性** | ⚠️ | **5 次 `pmap` 页表损坏 panic**，疑似 nullarc GPUVM 导致<br>见 [docs/07](docs/07-稳定性与崩溃分析.md) |
-| **Wi-Fi** | ✅ | Intel AX210，`AirportItlwm` 2.4.0 |
+| **GPU 硬件** | ✅ | Radeon 780M，8 GB VRAM，Metal 3，2160×1440 |
+| **GPU 接管 / 桌面合成** | ⚠️ | 开启后流畅但**有严重副作用**，默认关闭<br>见 [docs/07](docs/07-稳定性与崩溃分析.md) |
+| **系统稳定性** | ⚠️ | **16 次内核 panic** + **Safari 等进程批量 SIGKILL**<br>均发生在启用 GPU 接管期间 |
+| **Wi-Fi** | ✅ | Intel AX210，`AirportItlwm` 2.4.0 —— **当前主用网络** |
 | **蓝牙** | ⚠️ | 驱动/固件/扫描全部正常，但**射频信号极弱**（RSSI -90~-106），搜不到设备 —— 天线问题，见 [docs/04](docs/04-已知问题.md) 2.7 |
 | USB | ✅ | XHC0，6 设备正常 |
-| **板载有线网卡** | ❌ | Intel I226-V ×2，**三个驱动方案全部失败**<br>原生无链路 / AppleIGC v1.9 RX 死 / v1.8 与自编译版均 panic<br>见 [docs/03](docs/03-踩坑记录.md) 3.1 与 [patches/AppleIGC](patches/AppleIGC-源码修改.md) |
-| USB 网卡 | ✅ | AX88179B（`com.apple.driver.usb.cdc.ncm` 原生驱动），**推荐的有线上网方案** |
+| **板载有线网卡** | ❌ | Intel I226-V ×2，**四个驱动方案全部失败**<br>见 [docs/03](docs/03-踩坑记录.md) 3.1 与 [patches/AppleIGC](patches/AppleIGC-源码修改.md) |
+| USB 网卡 | ✅ | AX88179B（`com.apple.driver.usb.cdc.ncm` 原生驱动），**推荐的有线方案** |
 | 存储 | ✅ | NVMe + APFS |
 | CPU 电源管理 | ✅ | X86PlatformPlugin |
 | **音频** | ❌ | AMD ACP（`1022:15e3`）无 macOS 驱动 |
@@ -46,10 +48,9 @@
 
 > **性能提示**：如果空闲时 CPU 占用很高，先查 `VTDecoderXPCService` ——
 > 系统动态壁纸在无硬件解码的机器上会持续软解 90%+ CPU。
-> 见 [docs/04-已知问题.md](docs/04-已知问题.md) 2.6，`scripts/vtdec-guard.sh` 是现成的看门狗。
+> 见 [docs/04](docs/04-已知问题.md) 2.6，`scripts/vtdec-guard.sh` 是现成的看门狗。
 >
-> **稳定性提示**：判断当前在哪个档位 ——
-> `ioreg -rc IOFramebuffer -d1 | grep '^+-o'`，
+> **档位提示**：`ioreg -rc IOFramebuffer -d1 | grep '^+-o'`，
 > 显示 `PhxAMDFB` 是流畅档，显示 `.Display_boot` 是稳定档。
 
 ---

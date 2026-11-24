@@ -1,0 +1,17 @@
+# 统一换行符为 LF（跨平台编辑时不产生整文件 diff）
+* text=auto eol=lf
+
+# 二进制文件不做换行符转换
+*.efi binary
+*.aml binary
+*.icns binary
+*.png binary
+*.bin hexdiff binary
+*.hex text eol=lf
+*.lbl binary
+*.l2x binary
+*.dylib binary
+*.mov binary
+
+# kext 里的可执行文件是二进制
+*.kext/** binary

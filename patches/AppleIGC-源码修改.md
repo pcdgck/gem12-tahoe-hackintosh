@@ -190,7 +190,7 @@ cp <v1.9 官方 release 的 Info.plist> AppleIGC.kext/Contents/Info.plist
 # 官方 Info.plist 里的 CFBundleIdentifier = com.sxx.AppleIGC、CFBundleVersion = 1.9d2
 ```
 
-### 两个容易踩的坑
+### 四个容易踩的坑
 
 1. **源码里的 `AppleIGC/Info.plist` 是 Xcode 模板**，
    里面是 `${PRODUCT_NAME}`、`${PRODUCT_BUNDLE_IDENTIFIER}` 这类变量，
@@ -205,46 +205,126 @@ file AppleIGC.kext/Contents/MacOS/AppleIGC
 # 必须是: Mach-O 64-bit kext bundle x86_64
 ```
 
+3. **`CFBundleVersion` 必须是纯数字点分格式** ★
+
+   macOS 对这个字段有严格校验，**不能带字母后缀**：
+
+   ```
+   1.9-gem12c   ❌  ← 本项目踩过，报错如下
+   1.9.2        ✅
+   ```
+
+   踩坑时的内核日志：
+
+   ```
+   Kext com.sxx.AppleIGC error - CFBundleVersion bad value '1.9-gem12c'.
+   ```
+
+   **这条错误是静默的**：OpenCore 不会提示，系统照常启动，
+   只是 kext 没被加载（`kmutil showloaded | grep igc` 查不到）。
+   本项目因此白折腾了两轮，误以为"驱动加载后卡死"。
+
+4. **手工编译必须自己提供 `_kmod_info` 符号** ★
+
+   `ld -kext` 不会自动生成 `_kmod_info`，内核会用这个结构体来登记 kext。
+   缺少它 → 加载被拒。
+
+   判断方法（对比官方 release）：
+
+   ```sh
+   nm -gU 官方/Contents/MacOS/AppleIGC | wc -l    # 143
+   nm -gU 我们/Contents/MacOS/AppleIGC | wc -l    # 142  ← 差的正是 _kmod_info
+   ```
+
+   修法：加一个 `kmod_info.c`（见 `scripts/` 或下文），
+   用 `KMOD_EXPLICIT_DECL` 定义：
+
+   ```c
+   #include <mach/kmod.h>
+   KMOD_EXPLICIT_DECL(com.sxx.AppleIGC, "1.9.2", 0, 0);
+   ```
+
+   > ⚠️ **不要再加 `ld ... -exported_symbol _kmod_info`**。
+   > 那个参数会把**导出符号表限制成只有这一个**（我们当时就变成了 143 → 1），
+   > 把类的元数据符号全隐藏了。
+
 ---
 
-## 五、⚠️ 为什么当前默认禁用
+## 五、⚠️ 最终结论：这个方案不可用
 
-补丁解决了 RX，但跑了一段时间后出现**内存损坏类 panic**：
+把所有坑都填掉之后（legacy INTx + 完整帧分配 + 合法版本号 + `_kmod_info`），
+kext 终于**能被识别**了，但：
 
-```
-panic(cpu 13): Possible memory corruption:
-pmap_pv_remove(...): null pv_list, priors: 2 @pmap_internal.h:893
-Panicked task: pid 571: FamilyControlsAgent
-```
-
-崩溃进程是随机的（`FamilyControlsAgent`、`CacheDeleteExtension`），
-说明是系统级内存结构被写坏。
-
-**但注意**：这类 `pmap` panic 在装 AppleIGC **之前**就有
-（11-23 18:14 已经出现过），所以**不能完全归因于 AppleIGC** ——
-更可能是 `nullarc` 的 GPU 接管导致的（见 [docs/07](../docs/07-稳定性与崩溃分析.md)）。
-
-即便如此，在没有更确凿证据前，本仓库的默认配置
-**把 AppleIGC 设为 `Enabled = false`**，稳定优先。
-
-### 想自己试
+### 1. 系统拒绝加载未批准的 kext
 
 ```sh
-# 1. 打开 config.plist 里 AppleIGC 那条
-#    Kernel → Add → AppleIGC.kext → Enabled = true
-# 2. 重启
-# 3. 观察 Ipkts 是否增长、是否 panic
+sudo kmutil load -p /path/to/AppleIGC.kext
+# Extension with identifiers com.sxx.AppleIGC not approved to load.
+#   Please approve using System Settings.
 ```
 
-回滚点备份（本机）：
+EFI 注入的 kext 不受这个限制，但这个提示说明**第三方 kext 加载路径受限**，
+调试成本很高。
+
+### 2. 之前的"panic"全部归因错误
+
+**关键事实**：由于 `CFBundleVersion` 格式非法，
+本项目自编译的三个版本（`1.9-gem12` / `gem12b` / `gem12c`）
+**从来没有一个真正加载过**。
+
+也就是说：
+
+> 那些被归因于「AppleIGC 导致 `pmap` 内存损坏」的 panic，
+> 跟 AppleIGC **毫无关系** —— 它当时根本没在跑。
+
+真正的元凶是 `nullarc` 的 GPU 接管（见 [docs/07](../docs/07-稳定性与崩溃分析.md)）。
+
+### 3. 教训
+
+**诊断"驱动是否真的生效"时，不能只看 `config.plist` 里的 `Enabled`**：
+
+```sh
+# 错误做法：改完配置就以为生效了
+# 正确做法：每次都确认它真的被加载了
+kmutil showloaded | grep -i <你的kext>
+ioreg -rc <驱动类名> -d1
+```
+
+**kext 加载失败通常是静默的** —— 不查就等于在跟一个不存在的驱动较劲。
+
+---
+
+## 六、想自己继续折腾的话
+
+### 编译产物与工具
 
 ```
-/Users/Shared/gpu/backup/AppleIGC-v1.8.kext     原始 v1.8
-/Users/Shared/gpu/backup/AppleIGC-v1.9.kext     原始 v1.9
+/tmp/kmod_info.c                           _kmod_info 的定义
+build_igc3.sh（见本仓库 scripts/）          完整的编译脚本
 ```
 
-### 更稳妥的替代
+### 回滚点（本机）
 
-**用 Wi-Fi，或者 USB 网卡**（AX88179B，`com.apple.driver.usb.cdc.ncm` 原生驱动）。
-I226-V 在 macOS 上目前确实没有可靠的驱动方案，
-建议跟进 upstream 的修复合集。
+```
+/Users/Shared/gpu/backup/AppleIGC-v1.8.kext          官方 v1.8
+/Users/Shared/gpu/backup/AppleIGC-v1.9.kext          官方 v1.9
+/Users/Shared/gpu/backup/AppleIGC-1.9-gem12-a.kext   自编译（单补丁）
+```
+
+### 下一步值得试的方向
+
+1. **把 `CFBundleVersion` 改对、确认 kext 真的加载了，再重新验证 RX**
+   —— 本项目的补丁逻辑（legacy INTx + 完整帧分配）理论上是对的，
+   但从没在"真正加载"的前提下验证过。
+2. **检查 `IOProbeScore` 是否真的抢占了原生 dext**：
+   ```sh
+   ioreg -rc AppleIGC -d1        # 有没有实例
+   ioreg -rc IOUserNetworkEthernet -d1 | grep IOModel   # 是不是还挂着原生
+   ```
+3. 跟进 upstream 的 [issue #40](https://github.com/SongXiaoXi/AppleIGC/issues/40)
+   和 PR 合集。
+
+### 更稳妥的替代（当前生产方案）
+
+**用 Wi-Fi，或者 USB 网卡**（AX88179B，`com.apple.driver.usb.cdc.ncm` 原生驱动，
+免驱即插即用）。I226-V 在 macOS 上目前没有可靠的驱动方案。

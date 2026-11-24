@@ -204,7 +204,42 @@ clang -O2 -o memtest memtest.c
 
 ---
 
-## 五、`phxctl/` 与 `mesboot`
+## 五、AppleIGC 自编译工具（`build-appleigc.sh` + `kmod_info.c`）
+
+用于**手工编译** `AppleIGC.kext`（本机只有 Command Line Tools，没有完整 Xcode，
+`xcodebuild` 会报 "requires Xcode"）。
+
+```sh
+# 先准备源码
+git clone https://github.com/SongXiaoXi/AppleIGC.git ~/AppleIGC-src
+
+# 打补丁（见 patches/AppleIGC-源码修改.md）
+#   1. initEventSources() 里强制 legacy INTx
+#   2. RX 按 IGC_RXBUFFER_2048 分配（不是 IGC_RX_HDR_LEN）
+
+# 编译
+bash build-appleigc.sh
+```
+
+`kmod_info.c` 是**必需**的 —— 手工 `ld -kext` 不会自动生成 `_kmod_info` 符号，
+缺了内核就不认这个 kext。
+
+两个必守的规则（都踩过）：
+
+| 规则 | 如果违反 |
+|---|---|
+| `CFBundleVersion` 必须纯数字点分（`1.9.2`） | 内核静默拒绝加载：`bad value '1.9-gem12c'` |
+| 必须 `kmod_info.c` 提供 `_kmod_info` | 加载失败，符号表比官方少 1 个 |
+
+**不要**加 `ld ... -exported_symbol _kmod_info` —— 那会把导出符号表
+砍成只剩 1 个（官方是 143 个）。
+
+> 完整踩坑记录见 [patches/AppleIGC-源码修改.md](../patches/AppleIGC-源码修改.md)，
+> 网卡排查过程见 [docs/03](../docs/03-踩坑记录.md) 3.1。
+
+---
+
+## 六、`phxctl/` 与 `mesboot`
 
 `phxctl` 和 `mesboot` 是 nullarc 源码树里编译出来的用户态调试工具
 （`phxctl` 约 18 KB、`mesboot` 约 59 KB），
@@ -221,7 +256,7 @@ cd nullarc/src/mesboot  && make   # 产出 mesboot
 
 ---
 
-## 六、脚本里的路径约定
+## 七、脚本里的路径约定
 
 所有脚本假设 `$HOME=/Users/Shared`、工作目录 `$G=/Users/Shared/gpu`。
 `phxboot.sh` 里显式 `export HOME=/Users/Shared`，
