@@ -34,7 +34,7 @@ EFI/
     ├── Kexts/
     │   ├── AMFIPass.kext                         1.4.1
     │   ├── AirportItlwm.kext                     2.4.0
-    │   ├── AppleIGC.kext                         1.9-gem12（自编译，config 里禁用）
+    │   ├── AppleIGC.kext                         1.9.2（自编译，config 里禁用）
     │   ├── AppleMCEReporterDisabler.kext          1.2
     │   ├── BlueToolFixup.kext                    2.7.2
     │   ├── IntelBTPatcher.kext                   2.5.3
