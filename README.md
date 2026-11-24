@@ -16,24 +16,25 @@
 
 ## 先说结论
 
-**这台机器现在可以正常跑 macOS 桌面，GPU 合成、Metal 3、Wi-Fi、蓝牙都能用。**
+**这台机器能跑 macOS Tahoe 桌面，但必须在「流畅」和「稳定」之间二选一。**
 
-但必须说清楚：这是**实验性**配置，依赖一个 alpha 阶段的 GPU 驱动（nullarc），
-并且在迷你主机（无内建屏、纯外接 HDMI）这个上游**明确标注未支持**的场景下，
-需要三处源码修改才能工作。
+- **流畅档**：GPU 接管 + Metal 3 + 桌面合成，拖动 57 fps —— 但会偶发 `pmap` 页表损坏 panic
+- **稳定档（默认）**：固件帧缓冲，界面明显卡顿 —— 可长期运行
+
+原因是依赖的 GPU 驱动 `nullarc` 还是 alpha 阶段，上游自己就写明
+「可能导致内核 panic、数据损坏」。详见 [docs/07-稳定性与崩溃分析.md](docs/07-稳定性与崩溃分析.md)。
 
 | 子系统 | 状态 | 说明 |
 |---|---|---|
 | 引导 | ✅ | OpenCore，内置盘独立启动 |
-| **GPU / 显示** | ✅ | Radeon 780M，**8 GB VRAM，Metal 3**，2160×1440 |
-| **桌面合成** | ✅ | WindowServer 在 GPU 上，空闲 CPU 0.2% |
-| 帧同步 | ✅ | vbl-timing，60 Hz |
-| 残影 | ✅ | dbuf 双缓冲 |
+| **GPU / 显示** | ⚠️ | Radeon 780M，**默认关闭接管**（`iondrvframebuffer`）<br>开启后 8 GB VRAM / Metal 3 / 2160×1440，但**有 panic 风险** |
+| **桌面合成** | ⚠️ | 开启接管时有；默认无 → 界面卡顿 |
+| **稳定性** | ⚠️ | **5 次 `pmap` 页表损坏 panic**，疑似 nullarc GPUVM 导致<br>见 [docs/07](docs/07-稳定性与崩溃分析.md) |
 | **Wi-Fi** | ✅ | Intel AX210，`AirportItlwm` 2.4.0 |
-| **蓝牙** | ⚠️ | Intel AX210，驱动/固件/扫描全部正常，但**射频信号极弱**（RSSI -90~-106），搜不到设备 —— 见 [docs/04](docs/04-已知问题.md) 2.7 |
+| **蓝牙** | ⚠️ | 驱动/固件/扫描全部正常，但**射频信号极弱**（RSSI -90~-106），搜不到设备 —— 天线问题，见 [docs/04](docs/04-已知问题.md) 2.7 |
 | USB | ✅ | XHC0，6 设备正常 |
-| **有线网卡** | ✅ | **板载 Intel I226-V ×2，2.5G**（`AppleIGC` v1.8，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
-| USB 网卡 | ✅ | AX88179B，装机时用（Recovery 里需要它，见 [docs/03](docs/03-踩坑记录.md) 3.2） |
+| **板载有线网卡** | ❌ | Intel I226-V ×2，**三个驱动方案全部失败**<br>原生无链路 / AppleIGC v1.9 RX 死 / v1.8 与自编译版均 panic<br>见 [docs/03](docs/03-踩坑记录.md) 3.1 与 [patches/AppleIGC](patches/AppleIGC-源码修改.md) |
+| USB 网卡 | ✅ | AX88179B（`com.apple.driver.usb.cdc.ncm` 原生驱动），**推荐的有线上网方案** |
 | 存储 | ✅ | NVMe + APFS |
 | CPU 电源管理 | ✅ | X86PlatformPlugin |
 | **音频** | ❌ | AMD ACP（`1022:15e3`）无 macOS 驱动 |
@@ -46,6 +47,10 @@
 > **性能提示**：如果空闲时 CPU 占用很高，先查 `VTDecoderXPCService` ——
 > 系统动态壁纸在无硬件解码的机器上会持续软解 90%+ CPU。
 > 见 [docs/04-已知问题.md](docs/04-已知问题.md) 2.6，`scripts/vtdec-guard.sh` 是现成的看门狗。
+>
+> **稳定性提示**：判断当前在哪个档位 ——
+> `ioreg -rc IOFramebuffer -d1 | grep '^+-o'`，
+> 显示 `PhxAMDFB` 是流畅档，显示 `.Display_boot` 是稳定档。
 
 ---
 
@@ -59,7 +64,7 @@
 | 内存 | 48 GB DDR5-5600 |
 | 存储 | aigo NVMe SSD P7000Z 2TB（整盘安装 macOS） |
 | 无线 | Intel AX210（`8086:2723`，Wi-Fi 6E + BT 5.3） |
-| 有线 | 板载 **Intel I226-V ×2**（2.5G，`8086:125C`）<br>驱动用 `AppleIGC` v1.8（原生 dext 在本机协商不出链路，见 [docs/03](docs/03-踩坑记录.md) 3.1）<br>+ USB AX88179B（装机时用） |
+| 有线 | 板载 **Intel I226-V ×2**（2.5G，`8086:125C`）—— **macOS 下无可用驱动**<br>推荐 **USB AX88179B**（`com.apple.driver.usb.cdc.ncm` 原生驱动）或 Wi-Fi |
 | 显示 | **仅外接 HDMI**，2160×1440@60（固件 GOP 点亮的单一模式） |
 | 系统 | macOS Tahoe **26.7.3**（build `25G342`） |
 | SMBIOS | `MacBookPro16,1` |
@@ -225,22 +230,24 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 │   ├── 03-踩坑记录.md               所有失败尝试与原因分析
 │   ├── 04-已知问题.md               仍然存在的问题
 │   ├── 05-恢复手册.md               出问题怎么救
-│   └── 06-EFI配置详解.md            config.plist 逐项说明
+│   ├── 06-EFI配置详解.md            config.plist 逐项说明
+│   └── 07-稳定性与崩溃分析.md ★     12 个 panic 的分类、内存排除、nullarc 嫌疑
 ├── efi/
-│   ├── EFI/                         ★ 完整可刷写的 EFI 分区内容（33 MB）
+│   ├── EFI/                         ★ 完整可刷写的 EFI 分区内容（34 MB）
 │   │   ├── BOOT/BOOTx64.efi
 │   │   ├── OC/
 │   │   │   ├── OpenCore.efi
 │   │   │   ├── config.plist         三码已替换为占位符
 │   │   │   ├── ACPI/                5 个 SSDT
 │   │   │   ├── Drivers/             6 个 .efi
-│   │   │   ├── Kexts/               13 个 kext
+│   │   │   ├── Kexts/               14 个 kext（含自编译 AppleIGC，默认禁用）
 │   │   │   └── Resources/           OpenCanopy 字体与图标
 │   │   └── NullMoth/LogoutHook/     上游附带，本机不用（见说明）
 │   └── EFI目录结构.md               结构详解、为什么禁用某些组件
 ├── patches/
 │   ├── PhxAccel-源码修改.md         EDID + 背光 + VRAM 池
-│   └── PhxBringup-源码修改.md       ptfix
+│   ├── PhxBringup-源码修改.md       ptfix
+│   └── AppleIGC-源码修改.md         强制 legacy INTx 补丁 + 无 Xcode 编译方法
 ├── scripts/                         实际部署的工作脚本（见 scripts/README.md）
 │   ├── README.md                    每个脚本干什么、失败保护怎么工作
 │   ├── phxboot.sh                   开机 GPU bring-up + M2 状态机
@@ -252,7 +259,8 @@ sysctl -w debug.phxfb_timing=1             # detailed timing
 │   ├── full.sh                      完整 bring-up 到 MES
 │   ├── kinst.sh                     重建 Aux KC（带校验）
 │   ├── vtdec-guard.sh               动态壁纸解码看门狗（防 90% CPU）
-│   └── local.vtdecguard.plist       对应 LaunchDaemon
+│   ├── local.vtdecguard.plist       对应 LaunchDaemon
+│   └── memtest.c                    内存压力测试（排除内存故障用）
 └── evidence/                        系统信息
 ```
 
@@ -355,7 +363,7 @@ sudo reboot
 | PhxXhciKick | [kevin8717/TongFang-7840HS-Hackintosh](https://github.com/kevin8717/TongFang-7840HS-Hackintosh) | 1.0.0 |
 | USBToolBox / UTBDefault | [USBToolBox](https://github.com/USBToolBox/kext) | 1.2.0 |
 | **AirportItlwm** | [laobamac/itlwm](https://github.com/laobamac/itlwm) | 2.4.0（Tahoe） |
-| **AppleIGC** | [SongXiaoXi/AppleIGC](https://github.com/SongXiaoXi/AppleIGC) | **v1.8**（v1.9 有 MSI bug，见 [docs/03](docs/03-踩坑记录.md) 3.1） |
+| **AppleIGC** | [SongXiaoXi/AppleIGC](https://github.com/SongXiaoXi/AppleIGC) @ `8802cba` | **1.9-gem12（自编译，默认禁用）**<br>强制 legacy INTx，见 [patches/AppleIGC](patches/AppleIGC-源码修改.md) |
 | **IntelBluetoothFirmware** | [lshbluesky/IntelBluetoothFirmware](https://github.com/lshbluesky/IntelBluetoothFirmware) | **2.5.3**（2.5.2 起含 Tahoe BLE 修复） |
 | **BlueToolFixup** | [Acidanthera/BrcmPatchRAM](https://github.com/acidanthera/BrcmPatchRAM) | 2.7.2 |
 | IntelBTPatcher | lshbluesky fork | **2.5.3** |

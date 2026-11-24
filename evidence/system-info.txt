@@ -1,8 +1,8 @@
 # 系统信息快照
 
-生成时间: Tue Nov 24 02:10 CST 2026
+采集时间: 2026-11-24 16:56 CST
 机器: 天钡 GEM12 (Ryzen 7 8845HS / Radeon 780M)
-状态: **可用** —— GPU 合成正常、Wi-Fi/蓝牙正常
+**当前档位: 稳定档（GPU 接管关闭）** —— 能显示、能上网，但界面无 GPU 合成
 
 ## sw_vers
 
@@ -20,69 +20,53 @@ AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
 
 ## 内存
 
-48 GB
-
-## GPU
-
 ```
-Graphics/Displays:
-
-    AMD Radeon 780M:
-
-      Chipset Model: AMD Radeon 780M
-      Type: GPU
-      Bus: PCIe
-      PCIe Lane Width: x16
-      VRAM (Total): 8 GB
-      Vendor: AMD (0x1002)
-      Device ID: 0x1900
-      Revision ID: 0x00c5
-      Metal Support: Metal 3
-      Displays:
-        Display:
-          Resolution: 2160 x 1440
-          UI Looks like: 2160 x 1440
-          Framebuffer Depth: 24-Bit Color (ARGB8888)
-          Main Display: Yes
-          Mirror: Off
-          Online: Yes
-          Automatically Adjust Brightness: No
-          Connection Type: Internal
+2 × 24 GB DDR5-5600
+Part Number: CT24G56C46S5.M8B1 (Crucial)
+ECC: Disabled
 ```
 
-> 注意 `Connection Type: Internal` —— 这是 `PhxAMDFB` 把外接 HDMI
-> 当作内建 eDP 面板报告的结果（见 patches/PhxAccel-源码修改.md 的 EDID 部分）。
+内存压力测试（`scripts/memtest.c`）：4GB×2 + 16GB×3 + 32GB×1，
+四种模式交替，累计约 **350 GB 读写，0 位翻转** → 内存无硬错误。
 
-## 关键 sysctl
-
-```
-debug.phxfb_dbuf                 = 1
-debug.phxfb_dbuf_state           = 1
-debug.phxfb_timing               = 1
-debug.nvaccel_surface_gpu_on     = 0
-debug.nvaccel_iop_sse            = 1
-debug.nvaccel_iop_vsync          = 1
-debug.nvaccel_iop_ok             = 141673   (GPU 合成帧计数，持续递增)
-debug.phxagdc                    = 1
-```
-
-## PhxBringup 属性（ioreg）
+## GPU / 显示
 
 ```
-"phx-build"           = 34
-"phx-stage"           = "E3"
-"phx-fb-size"         = 8589934592      (8 GiB，对应 BIOS UMA 8G)
-"phx-fb-phys"         = 44560285696
-"phx-fb-aper-len"     = 268435456
-"phx-fb-aper-phys"    = 53150220288
-"phx-fb-mc-base"      = 549755813888
-"phx-topology-cu"     = 12              (12 CU，RDNA3 780M 正确)
-"phx-topology-rb"     = 4               (4 RB)
-"phx-hdp-flush-dword" = 3607
-"phx-debug"           = Yes
-"phx-pci-cmd-before"  = 6
-"phx-pci-cmd-after"   = 6
+AMD Radeon 780M:
+  VRAM (Total): 8 GB
+  Metal Support: Metal 3
+  Resolution: 2160 x 1440
+  Online: Yes
 ```
+
+**但当前帧缓冲是固件帧缓冲**：
+
+```
++-o .Display_boot  <class IONDRVFramebuffer, registered, matched, active>
+```
+
+不是 `PhxAMDFB` → 说明 GPU 接管关闭，WindowServer 走 CPU 合成，**界面有卡顿**。
+
+### 两个档位
+
+| 档位 | 帧缓冲 | 界面 | 稳定性 |
+|---|---|---|---|
+| 流畅档 | `PhxAMDFB` + `NMXAccel` | Metal 3，拖动 57 fps | ❌ 偶发 pmap panic |
+| **稳定档（当前）** | `IONDRVFramebuffer` | CPU 合成，卡顿 | ✅ 可长期运行 |
+
+切换方法见 [docs/07-稳定性与崩溃分析.md](../docs/07-稳定性与崩溃分析.md)。
+
+`PhxAccel.kext`（0.1）仍然加载（bring-up 代码在跑），只是不接管面板。
+
+## 关键 sysctl（稳定档下为空/0）
+
+```
+debug.nvaccel_iop_ok       0 或不存在   (GPU 合成帧计数)
+debug.phxfb_dbuf_state     不存在       (双缓冲未启用)
+debug.phxagdc              不存在
+```
+
+> 这些值在流畅档下应该是：`iop_ok` 持续递增、`dbuf_state = 1`、`phxagdc = 1`。
 
 ## 已加载的第三方 kext
 
@@ -94,204 +78,121 @@ com.dhinakg.AMFIPass                  (1.4.1)
 com.phx.PhxXhciKick                   (1.0.0)
 org.acidanthera.NVMeFix               (1.1.4)
 as.vit9696.VirtualSMC                 (1.3.9)
-com.zxystd.AirportItlwm               (2.4.0)
 com.dhinakg.USBToolBox.kext           (1.2.0)
+com.zxystd.AirportItlwm               (2.4.0)
 org.drip.PhxBringup                   (1.0.0)
 com.zxystd.IntelBluetoothFirmware     (2.5.3)
-com.sxx.AppleIGC                      (1.8d1)   ← I226-V 2.5G 网卡
 com.luuumi.PhxAccel                   (0.1)     ← Aux KC，不在 EFI
 ```
 
-## IORegistry 里的关键对象
-
-```
-PhxAMDFB  <class PhxAMDFB, registered, matched, active>
-  +-o backlight            <class PhxBacklight>         ← patches 第 6 条（PWM 缺失时仍创建）
-  +-o AppleMCCSControlModule
-  +-o AGPM
-  +-o display0 <class IODisplayConnect>
-    +-o AppleBacklightDisplay
-
-NMXAccel  <class NMXAccel, registered, matched, active>
-  "IOPersonalityPublisher"  = "com.luuumi.PhxAccel"
-  "NVAccelEnabledFrom"      = "displayModeDidChange"
-```
-
-## phxboot 日志（成功启动）
-
-```
-== 2026-11-24 01:01:02 phxboot
-PhxAMDFB on the panel: 1
-compute: scratch0=0xdeadbeef (want deadbeef) testbuf=0xfeedf00d (want feedf00d) hqd_active=1 rptr=8
-adopt queue -> kr 0x0
-gfx: scratch1=0xdeadbeef (want deadbeef) testbuf=0x6f7a6f7a (want 6f7a6f7a) rptr=0 rptr_wb=968 grbm=0xa800302c cp_stat=0x00000000
-adopt gfx queue -> kr 0x0
-claim -> kr 0x0
-armed and released at 01:01:11; agdc 1
-WindowServer pid 194, frames on the panel 1129
-PhxAMDFB armed for the next boot
-done 01:02:43
-```
-
-关键行解读：
-
-| 行 | 含义 |
-|---|---|
-| `PhxAMDFB on the panel: 1` | M2 模式，PhxAMDFB 接管了面板 |
-| `scratch0=0xdeadbeef (want deadbeef)` | **计算队列**写入/读回验证通过 |
-| `scratch1=0xdeadbeef (want deadbeef)` | **图形队列**写入/读回验证通过 |
-| `grbm=0xa800302c` | GRBM 状态寄存器非零 = CP 在跑 |
-| `claim -> kr 0x0` | Metal 加速器认领成功 |
-| `armed and released at ...; agdc 1` | 显示 arming 完成，AGDC 生效 |
-| `frames on the panel 1129` | 面板上已合成 1129 帧 |
-| `PhxAMDFB armed for the next boot` | arming 已持久化到 NVRAM |
-
-## 性能实测
-
-### 修复前 vs 修复后（VTDecoder 问题）
-
-后台动态壁纸 `Tahoe Day`（170 MB HEVC）在无硬件解码器时走 CPU 软解：
-
-| 指标 | 修复前 | `killall WallpaperAerialsExtension` 后 |
-|---|---|---|
-| `VTDecoderXPCService` | **93.2% CPU / 4.1 GB** | 退出 |
-| `WindowServer` | 28.8% | **9.8%** |
-| `load average` | 4.66 | **3.14** |
-
-详见 [docs/04-已知问题.md](../docs/04-已知问题.md) 2.6。
-
-### 正常状态下的 CPU
-
-```
-PID   COMMAND          %CPU  MEM
-194   WindowServer     0.3   549 MB
-762   oink-backend     1.5   65 MB
-0     kernel_task      14.5  5.8 GB     ← 含 GPU 页表/Aux KC 占用
-```
-
-`WindowServer` 空闲 0.3% 是**正常值**。如果看到 20%+，先查是不是
-`VTDecoderXPCService` / `WindowServer` 组合（见上）。
-
-## 蓝牙
-
-```
-Address:      EC:4C:8C:F2:F1:AB
-State:        On
-Chipset:      THIRD_PARTY_DONGLE
-Transport:    USB
-Firmware:     v8641 c8641
-USB:          8087:0x0029 (bDeviceClass 224)
-```
-
-kext：`BlueToolFixup` 2.7.2 + `IntelBluetoothFirmware` **2.5.3** + `IntelBTPatcher` **2.5.3**
-
-### 已知问题：射频信号极弱（天线）
-
-驱动、固件、HCI、扫描全部正常，但实际收到的 BLE 广播 RSSI 在 -90 ~ -106：
-
-```
-bluetoothd: (CoreUtils) [CBDaemonServer] Identities resolve added: ...
-  DsFl < BLEAdvertisementData >, DsTy <NearbyInfoV2>,
-  DvF < Connectable >, RSSI -100, Ch 37 ...
-
-deviceInquiryComplete: error:0 aborted:0 devicesFound:0
-No devices found startInquiry over
-```
-
-正常 RSSI 应为 -40 ~ -70。信号衰减 30-50 dB = 天线/射频物理连接问题。
-
-> 日志里的 `rssi -45` / `rssi -50` 是**扫描过滤阈值**（`bleAdvRSSI`），不是实际信号。
-
-详见 [docs/04-已知问题.md](../docs/04-已知问题.md) 2.7。
+> **`com.sxx.AppleIGC` 未加载** —— config.plist 里 `Enabled = false`。
+> 原因见下文「网卡」。
 
 ## 网卡
 
-### 板载 Intel I226-V ×2（2.5G）—— AppleIGC v1.8
+### 板载 Intel I226-V ×2（2.5G）—— 无可用驱动
 
 ```
 Intel(R) I226 V:
-  Bus:            PCI
-  Vendor ID:      0x8086
-  Device ID:      0x125c
-  Revision:       0x0004
-  PCIe Link:      5.0 GT/s, x1
-  Driver:         com.sxx.AppleIGC (1.8d1)
-  BSD Device:     en0 / en1
-  MAC:            c8:ff:bf:03:d1:5c (en0)
-                  c8:ff:bf:03:d1:5d (en1)
+  Bus:        PCI
+  Vendor ID:  0x8086
+  Device ID:  0x125c
+  Revision:   0x0004
+  BSD Device: en0 / en1
+  MAC:        c8:ff:bf:03:d1:5c (en0)
+              c8:ff:bf:03:d1:5d (en1)
 ```
 
-`ioreg` 里的驱动实例：
+当前状态：
 
 ```
-+-o AppleIGC  <class AppleIGC, registered, matched, active>
-      "Model"          = "Intel(R) Ethernet Controller I226-V (IGC)"
-      "IOMACAddress"   = <c8ffbf03d15c>
-      "IOLinkStatus"   = 3                     (Up|Active)
-      "IOLinkSpeed"    = 2500000000            (2.5 Gbps)
-      "IOActiveMedium" = "00500036"            (IFM_2500_T, FDX|FLOW)
-      "IOProbeScore"   = 4000                  (> 原生 dext 的 3000，自动抢占)
+en0   status: inactive   media: autoselect (none)     ← 无链路
 ```
 
-**为什么不用 macOS 原生的 `AppleEthernetE1000`**：
-原生驱动在本机能绑定成功、能读出 MAC、能列出全部速率能力，
-但 PHY 链路协商不出来（`media: autoselect (none)` / `status: inactive`），
-换口、强制降速、重启驱动都无效。详见 [docs/03-踩坑记录.md](../docs/03-踩坑记录.md) 3.1。
+原生 `AppleEthernetE1000` 在本机**协商不出 PHY 链路**，
+社区驱动 `AppleIGC` 三个版本依次试过都有问题：
 
-**为什么用 v1.8 而不是 v1.9**：
-v1.9 的 PR #38 让驱动监听 MSI 中断源，但 `pci_enable_msi_block()` 被 `#if 0` 禁用、
-MSI 从未真正启用 → 中断永不触发 → **RX 完全死掉**
-（link 显示 active 但 `Ipkts` 恒为 0）。详见 [docs/03](../docs/03-踩坑记录.md) 3.1。
+| 方案 | 链路 | RX | 结果 |
+|---|---|---|---|
+| 原生 `AppleEthernetE1000` | ❌ | — | PHY 协商不出链路 |
+| `AppleIGC` v1.9 | ✅ | ❌ | RX 完全死（`Ipkts` 恒 0） |
+| `AppleIGC` v1.8 | ✅ | ✅ | `M_PKTHDR` 内核 panic |
+| `AppleIGC` 1.9-gem12（自编译） | ✅ | ✅ | `pmap` 内存损坏 panic |
 
-### 实测（有线）
+完整排查过程见 [docs/03-踩坑记录.md](../docs/03-踩坑记录.md) 3.1，
+补丁与编译方法见 [patches/AppleIGC-源码修改.md](../patches/AppleIGC-源码修改.md)。
 
-```
-en0   inet 192.168.1.128   media: autoselect (2500Base-T <full-duplex,flow-control>)
-      status: active
-
-netstat -I en0 -b
-  Ipkts=7472  Ierrs=0  Ibytes=4680524
-  Opkts=4052  Oerrs=0  Obytes=872594
-
-ping -c 3 192.168.1.1
-  3 packets transmitted, 3 packets received, 0.0% packet loss
-  round-trip min/avg/max = 0.396/0.498/0.573 ms
-
-curl --interface 192.168.1.128 https://www.apple.com
-  HTTP 200
-```
-
-### USB 网卡 AX88179B（装机时用）
+### USB 网卡 AX88179B（推荐的有线方案）
 
 ```
 AX88179B:
   Bus:            USB
   Vendor:         ASIX (0x0b95)
   Product ID:     0x1790
-  USB Link Speed: 5 Gb/s
-  Driver:         com.apple.driver.usb.cdc.ncm
+  Driver:         com.apple.driver.usb.cdc.ncm   (原生驱动)
   BSD Device:     en2
   MAC:            9c:69:d3:d2:00:53
 ```
 
-## Wi-Fi
+当前 `inactive`（没插）。插上即用，不需要任何 kext。
+
+## Wi-Fi（当前主用网络）
 
 ```
 Hardware Port: Wi-Fi
 Device:        en3
 MAC:           ec:4c:8c:f2:f1:a7    (Intel AX210, PCI 8086:2723)
+               实际使用随机 MAC 地址
 Driver:        AirportItlwm 2.4.0
+IP:            192.168.1.209
 支持:          WPA2-Personal / WPA2+WPA3 transition
 不支持:        WPA3-only (SAE)、AWDL
 ```
+
+## 蓝牙
+
+```
+Address:      NULL
+State:        Off
+Firmware:     v8641 c8641
+Transport:    USB
+USB:          8087:0x0029 (bDeviceClass 224)
+```
+
+kext：`BlueToolFixup` 2.7.2 + `IntelBluetoothFirmware` **2.5.3** + `IntelBTPatcher` **2.5.3**
+
+**已知问题：射频信号极弱（天线）**。曾实测驱动/固件/HCI/扫描全部正常，
+能收到 BLE 广播（含手机 `NearbyInfoV2`），但 RSSI 全在 **-90 ~ -106**
+（正常应为 -40 ~ -70），`devicesFound: 0` → 搜不到设备。
+
+详见 [docs/04-已知问题.md](../docs/04-已知问题.md) 2.7。
+
 ## 网络接口汇总
 
 | 接口 | 设备 | 驱动 | 状态 |
 |---|---|---|---|
-| `en0` | Intel I226-V 口1 | `AppleIGC` 1.8 | **active**，192.168.1.128，2500Base-T |
-| `en1` | Intel I226-V 口2 | `AppleIGC` 1.8 | inactive（未插线） |
-| `en2` | USB AX88179B | `com.apple.driver.usb.cdc.ncm` | inactive |
-| `en3` | Intel AX210 Wi-Fi | AirportItlwm 2.4.0 | inactive（有线接管后关闭） |
+| `en0` | Intel I226-V 口1 | 无可用驱动 | inactive |
+| `en1` | Intel I226-V 口2 | 无可用驱动 | inactive |
+| `en2` | USB AX88179B | `com.apple.driver.usb.cdc.ncm` | inactive（未插） |
+| `en3` | Intel AX210 Wi-Fi | AirportItlwm 2.4.0 | **active**，192.168.1.209 |
+
+## 稳定性
+
+2026-11-23 18:14 ~ 11-24 05:22 期间共 **12 个内核 panic**：
+
+| 类型 | 次数 |
+|---|---|
+| **`pmap` 页表损坏** | **5** |
+| page fault / general protection | 4 |
+| 网络栈 mbuf | 2 |
+| APFS namedstream | 1 |
+
+- `pmap` 类崩溃在 **AppleIGC 装上之前**就已出现（11-23 18:14）
+- 崩溃进程随机（`FamilyControlsAgent` / `CacheDeleteExtension` / `calaccessd`）
+- 内存测试已排除内存条（350 GB 零错误）
+- **最可能是 `nullarc` 的 GPU 接管（GPUVM 页表操作）导致**
+
+完整分析见 [docs/07-稳定性与崩溃分析.md](../docs/07-稳定性与崩溃分析.md)。
 
 ## 已知不可用
 
@@ -302,3 +203,5 @@ Driver:        AirportItlwm 2.4.0
 | AirDrop | Intel 网卡无 AWDL |
 | USB-C 视频 | USB4 `1022:1668/1669` 无 macOS 驱动 |
 | 硬件视频解码 | VCN 无驱动，HEVC/H.264 全靠 CPU |
+| 板载有线网卡 | I226-V 无可用驱动（见上） |
+| 蓝牙 | 射频信号极弱（天线问题） |

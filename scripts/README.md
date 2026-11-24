@@ -181,7 +181,30 @@ sudo launchctl load -w /Library/LaunchDaemons/local.vtdecguard.plist
 
 ---
 
-## 四、`phxctl/` 与 `mesboot`
+## 四、`memtest.c` — 内存压力测试
+
+诊断内核 panic 时用来**排除内存条故障**。纯 C、无外部依赖。
+
+原理：`malloc` 大块内存 → `memset` 触碰所有页（强制物理分配）
+→ 按 8 字节写入固定模式（`0xA5`/`0x5A`/`0xFF`/`0x00` 四种）
+→ **逐字节读回比对**，任何一位不一致都计错并打印首个错误偏移。
+
+```sh
+clang -O2 -o memtest memtest.c
+./memtest 16 3     # 每块 16 GB，跑 3 轮
+```
+
+**本机实测结果**：4GB×2 + 16GB×3 + 32GB×1，累计约 **350 GB 读写，零位翻转**
+→ 排除内存条故障，把 panic 嫌疑锁定到 GPU 驱动。
+
+> 软件测试不能替代硬件级 `memtest86`（后者会禁用缓存、做更激进的 pattern），
+> 但 350 GB 零错误足以排除「内存明显损坏」。
+
+详见 [docs/07-稳定性与崩溃分析.md](../docs/07-稳定性与崩溃分析.md)。
+
+---
+
+## 五、`phxctl/` 与 `mesboot`
 
 `phxctl` 和 `mesboot` 是 nullarc 源码树里编译出来的用户态调试工具
 （`phxctl` 约 18 KB、`mesboot` 约 59 KB），
@@ -198,7 +221,7 @@ cd nullarc/src/mesboot  && make   # 产出 mesboot
 
 ---
 
-## 五、脚本里的路径约定
+## 六、脚本里的路径约定
 
 所有脚本假设 `$HOME=/Users/Shared`、工作目录 `$G=/Users/Shared/gpu`。
 `phxboot.sh` 里显式 `export HOME=/Users/Shared`，
